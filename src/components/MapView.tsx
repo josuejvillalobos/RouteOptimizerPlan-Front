@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMapEvents, useMap } from 'react-leaflet'
 import L from 'leaflet'
-import { useRouteStore } from '../store/routeStore'
+import { useRouteStore, colorParaIndice } from '../store/routeStore'
 import { useUIStore } from '../store/UiStore'
 import type { Stop } from '../types/routeTypes'
 import { CloudOutlined, ThunderboltOutlined, WarningOutlined } from '@ant-design/icons'
@@ -26,8 +26,7 @@ function makeNumberedIcon(numero: number, bg: string) {
         box-shadow: 0 3px 8px rgba(0,0,0,0.35);
         display: flex; align-items: center; justify-content: center;
       ">
-
-      <span style="
+        <span style="
           transform: rotate(45deg);
           color: #fff; font-weight: 800; font-size: 12px;
           font-family: Arial, sans-serif;
@@ -48,8 +47,6 @@ const makeIcon = (color: string) => new L.Icon({
 
 const iconInicio = makeIcon('green')
 
-
-// Componente que sincroniza flyTo del store con el mapa
 function FlyToController() {
   const { flyTo, clearFlyTo } = useRouteStore()
   const map = useMap()
@@ -80,7 +77,6 @@ function MapClickHandler() {
   return null
 }
 
-// Cierra el panel automaticamente al tocar/arrastrar el mapa (solo movil)
 function PanelAutoClose() {
   const { setPanelOpen } = useUIStore()
   useMapEvents({
@@ -92,7 +88,7 @@ function PanelAutoClose() {
 }
 
 export default function MapView() {
-  const { puntoInicio, paradas, resultado, rutaGeometria, clima, loadClima, backendOk } = useRouteStore()
+  const { puntoInicio, paradas, resultado, segmentosVisuales, clima, loadClima, backendOk } = useRouteStore()
   const { panelOpen, togglePanel } = useUIStore()
 
   useEffect(() => { loadClima() }, [])
@@ -123,9 +119,9 @@ export default function MapView() {
         </Marker>
 
         {!resultado && paradas.map((p, i) => (
-          <Marker key={i} position={[p.latitud, p.longitud]} icon={makeNumberedIcon(i+1, '#1A7FC1')}>
+          <Marker key={i} position={[p.latitud, p.longitud]} icon={makeNumberedIcon(i + 1, colorParaIndice(i))}>
             <Popup>
-              <b style={{ color: '#1A7FC1' }}>Parada {i + 1}</b><br />
+              <b style={{ color: colorParaIndice(i) }}>Parada {i + 1}</b><br />
               <span style={{ fontSize: 12 }}>{p.etiqueta}</span>
             </Popup>
           </Marker>
@@ -133,26 +129,31 @@ export default function MapView() {
 
         {resultado && (
           <>
-            {rutaGeometria.length > 0 ? (
-              <Polyline
-                positions={rutaGeometria}
-                pathOptions={{ color: '#1A7FC1', weight: 6, opacity: 0.9, lineCap: 'round', lineJoin: 'round' }}
-              />
+            {segmentosVisuales.length > 0 ? (
+              segmentosVisuales.map((seg, i) => (
+                <Polyline
+                  key={i}
+                  positions={seg.geometria}
+                  pathOptions={{ color: seg.color, weight: 6, opacity: 0.9, lineCap: 'round', lineJoin: 'round' }}
+                />
+              ))
             ) : (
-              <Polyline
-                positions={resultado.segmentos.flatMap(s => [
-                  [s.origen.latitud, s.origen.longitud] as [number, number],
-                  [s.destino.latitud, s.destino.longitud] as [number, number],
-                ])}
-                pathOptions={{ color: '#1A7FC1', weight: 5, opacity: 0.7, dashArray: '8 6' }}
-              />
+              resultado.segmentos.map((s, i) => (
+                <Polyline
+                  key={i}
+                  positions={[
+                    [s.origen.latitud, s.origen.longitud],
+                    [s.destino.latitud, s.destino.longitud],
+                  ]}
+                  pathOptions={{ color: colorParaIndice(i), weight: 5, opacity: 0.7, dashArray: '8 6' }}
+                />
+              ))
             )}
             <Marker position={[puntoInicio.latitud, puntoInicio.longitud]} icon={iconInicio}>
               <Popup><b style={{ color: '#003F7F' }}>Inicio</b><br />{puntoInicio.etiqueta}</Popup>
             </Marker>
             {resultado.segmentos.map((seg, i) => {
-              const esUltimo = i === resultado.segmentos.length - 1
-              const color = esUltimo ? '#DC2626' : '#1A7FC1'
+              const color = colorParaIndice(i)
               return (
                 <Marker key={i} position={[seg.destino.latitud, seg.destino.longitud]} icon={makeNumberedIcon(i + 1, color)}>
                   <Popup>
@@ -169,7 +170,6 @@ export default function MapView() {
         )}
       </MapContainer>
 
-      {/* Widget clima */}
       {clima && (
         <div style={{
           position: 'absolute', top: 16, right: 16, zIndex: 1000,
@@ -204,7 +204,6 @@ export default function MapView() {
         </div>
       )}
 
-      {/* Indicador de conexion — discreto, esquina superior derecha */}
       <div style={{
         position: 'absolute', top: clima ? 80 : 16, right: 16, zIndex: 1000,
         display: 'flex', alignItems: 'center', gap: 5,
@@ -224,7 +223,6 @@ export default function MapView() {
         {backendOk ? 'Conectado' : 'Sin conexion'}
       </div>
 
-      {/* Hint */}
       {paradas.length === 0 && !resultado && (
         <div style={{
           position: 'absolute', bottom: 32, left: '50%', transform: 'translateX(-50%)',
@@ -239,7 +237,6 @@ export default function MapView() {
         </div>
       )}
 
-      {/* Boton flotante para reabrir el panel */}
       {!panelOpen && (
         <button
           onClick={togglePanel}

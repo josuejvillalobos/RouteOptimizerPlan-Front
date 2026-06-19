@@ -2,6 +2,15 @@ import { create } from 'zustand'
 import type { Stop, TipoTransporte, RutaOptimizada } from '../types/routeTypes'
 import { optimizarRuta, getClima, type ClimateInfo } from '../services/api'
 
+export const ROUTE_COLORS = [
+  '#1A7FC1', '#DC2626', '#16A34A', '#D97706', '#7C3AED',
+  '#DB2777', '#0D9488', '#CA8A04', '#4F46E5', '#EA580C',
+]
+
+export function colorParaIndice(i: number) {
+  return ROUTE_COLORS[i % ROUTE_COLORS.length]
+}
+
 const INICIO_DEFAULT: Stop = {
   etiqueta: 'Almacen MIAA — Plaza Patria',
   calle: 'Plaza de la Patria, Centro, Aguascalientes',
@@ -14,7 +23,7 @@ interface RouteStore {
   paradas: Stop[]
   transporte: TipoTransporte
   resultado: RutaOptimizada | null
-  rutaGeometria: [number, number][]
+  segmentosVisuales: { geometria: [number, number][]; color: string }[]
   loading: boolean
   error: string | null
   backendOk: boolean
@@ -38,7 +47,7 @@ export const useRouteStore = create<RouteStore>((set, get) => ({
   paradas: [],
   transporte: 'AUTO',
   resultado: null,
-  rutaGeometria: [],
+  segmentosVisuales: [],
   loading: false,
   error: null,
   backendOk: false,
@@ -57,12 +66,13 @@ export const useRouteStore = create<RouteStore>((set, get) => ({
 
   removeParada: (index) => set((s) => ({
     paradas: s.paradas.filter((_, i) => i !== index),
-    resultado: null, rutaGeometria: [],
+    resultado: null,
+    segmentosVisuales: [],
   })),
 
   setTransporte: (transporte) => set({ transporte }),
   setBackendOk: (backendOk) => set({ backendOk }),
-  limpiarResultado: () => set({ resultado: null, error: null, rutaGeometria: [] }),
+  limpiarResultado: () => set({ resultado: null, error: null, segmentosVisuales: [] }),
   clearFlyTo: () => set({ flyTo: null }),
 
   loadClima: async () => {
@@ -76,7 +86,7 @@ export const useRouteStore = create<RouteStore>((set, get) => ({
       set({ error: 'Agrega al menos una parada antes de optimizar' })
       return
     }
-    set({ loading: true, error: null, resultado: null, rutaGeometria: [] })
+    set({ loading: true, error: null, resultado: null, segmentosVisuales: [] })
     try {
       const algoritmo = paradas.length <= 10
         ? 'VECINO_MAS_CERCANO'
@@ -91,19 +101,30 @@ export const useRouteStore = create<RouteStore>((set, get) => ({
         paradas,
       })
 
+      // Calcular geometria real de calles para CADA segmento por separado
+      // para poder colorear cada tramo independientemente
       try {
         const osrmPort = transporte === 'A_PIE' ? 5001 : 5000
         const perfil = transporte === 'A_PIE' ? 'foot' : 'driving'
         const allPoints = [puntoInicio, ...result.ordenOptimizado]
-        const coords = allPoints.map(p => `${p.longitud},${p.latitud}`).join(';')
-        const osrmRes = await fetch(
-          `http://localhost:${osrmPort}/route/v1/${perfil}/${coords}?overview=full&geometries=geojson`
-        )
-        const osrmData = await osrmRes.json()
-        const geometria: [number, number][] = osrmData.routes[0].geometry.coordinates.map(
-          ([lon, lat]: [number, number]) => [lat, lon]
-        )
-        set({ resultado: result, rutaGeometria: geometria, loading: false })
+
+        const segmentosVisuales: { geometria: [number, number][]; color: string }[] = []
+
+        for (let i = 0; i < allPoints.length - 1; i++) {
+          const a = allPoints[i]
+          const b = allPoints[i + 1]
+          const coords = `${a.longitud},${a.latitud};${b.longitud},${b.latitud}`
+          const osrmRes = await fetch(
+            `http://localhost:${osrmPort}/route/v1/${perfil}/${coords}?overview=full&geometries=geojson`
+          )
+          const osrmData = await osrmRes.json()
+          const geometria: [number, number][] = osrmData.routes[0].geometry.coordinates.map(
+            ([lon, lat]: [number, number]) => [lat, lon]
+          )
+          segmentosVisuales.push({ geometria, color: colorParaIndice(i) })
+        }
+
+        set({ resultado: result, segmentosVisuales, loading: false })
       } catch {
         set({ resultado: result, loading: false })
       }
@@ -117,10 +138,9 @@ export const useRouteStore = create<RouteStore>((set, get) => ({
     paradas: [],
     transporte: 'AUTO',
     resultado: null,
-    rutaGeometria: [],
+    segmentosVisuales: [],
     loading: false,
     error: null,
     flyTo: { lat: 21.8818, lon: -102.2916, zoom: 13 },
   }),
-
 }))

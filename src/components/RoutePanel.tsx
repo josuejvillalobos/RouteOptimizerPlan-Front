@@ -6,7 +6,7 @@ import {
   InfoCircleOutlined, DownOutlined, UpOutlined, CloseOutlined,
 } from '@ant-design/icons'
 import { useState } from 'react'
-import { useRouteStore } from '../store/routeStore'
+import { useRouteStore, colorParaIndice } from '../store/routeStore'
 import { useUIStore } from '../store/UiStore'
 import type { TipoTransporte } from '../types/routeTypes'
 import SearchBox from './SearchBox'
@@ -141,14 +141,14 @@ export default function RoutePanel() {
               </div>
               {paradas.length > 0 && (
                 <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 160, overflowY: 'auto' }}>
-                  {paradas.map((p, i) => (
+                    {paradas.map((p, i) => (
                     <div key={i} style={{
                       display: 'flex', alignItems: 'center', gap: 8,
                       background: '#f8fafc', borderRadius: 12, padding: '7px 10px',
-                      border: '1px solid #e2e8f0',
+                      border: `1px solid ${colorParaIndice(i)}30`,
                     }}>
                       <span style={{
-                        width: 18, height: 18, borderRadius: '50%', background: '#1A7FC1',
+                        width: 18, height: 18, borderRadius: '50%', background: colorParaIndice(i),
                         color: '#fff', fontSize: 9, fontWeight: 800,
                         display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
                       }}>{i + 1}</span>
@@ -329,9 +329,10 @@ export default function RoutePanel() {
                   <div key={i} style={{
                     display: 'flex', gap: 10, padding: '9px 14px',
                     borderBottom: i < resultado.segmentos.length - 1 ? '1px solid #f8fafc' : 'none',
+                    borderLeft: `3px solid ${colorParaIndice(i)}`,
                   }}>
                     <span style={{
-                      width: 18, height: 18, borderRadius: '50%', background: '#1A7FC1',
+                      width: 18, height: 18, borderRadius: '50%', background: colorParaIndice(i),
                       color: '#fff', fontSize: 9, fontWeight: 800,
                       display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1,
                     }}>{seg.orden}</span>
