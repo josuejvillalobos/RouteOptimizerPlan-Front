@@ -13,6 +13,33 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
 })
 
+function makeNumberedIcon(numero: number, bg: string) {
+  return L.divIcon({
+    className: 'numbered-marker',
+    html: `
+      <div style="
+        width: 30px; height: 30px;
+        background: ${bg};
+        border: 3px solid #fff;
+        border-radius: 50% 50% 50% 0;
+        transform: rotate(-45deg);
+        box-shadow: 0 3px 8px rgba(0,0,0,0.35);
+        display: flex; align-items: center; justify-content: center;
+      ">
+
+      <span style="
+          transform: rotate(45deg);
+          color: #fff; font-weight: 800; font-size: 12px;
+          font-family: Arial, sans-serif;
+        ">${numero}</span>
+      </div>
+    `,
+    iconSize: [30, 30],
+    iconAnchor: [15, 30],
+    popupAnchor: [0, -28],
+  })
+}
+
 const makeIcon = (color: string) => new L.Icon({
   iconUrl: `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-${color}.png`,
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
@@ -20,8 +47,7 @@ const makeIcon = (color: string) => new L.Icon({
 })
 
 const iconInicio = makeIcon('green')
-const iconParada = makeIcon('blue')
-const iconRuta   = makeIcon('red')
+
 
 // Componente que sincroniza flyTo del store con el mapa
 function FlyToController() {
@@ -97,7 +123,7 @@ export default function MapView() {
         </Marker>
 
         {!resultado && paradas.map((p, i) => (
-          <Marker key={i} position={[p.latitud, p.longitud]} icon={iconParada}>
+          <Marker key={i} position={[p.latitud, p.longitud]} icon={makeNumberedIcon(i+1, '#1A7FC1')}>
             <Popup>
               <b style={{ color: '#1A7FC1' }}>Parada {i + 1}</b><br />
               <span style={{ fontSize: 12 }}>{p.etiqueta}</span>
@@ -124,17 +150,21 @@ export default function MapView() {
             <Marker position={[puntoInicio.latitud, puntoInicio.longitud]} icon={iconInicio}>
               <Popup><b style={{ color: '#003F7F' }}>Inicio</b><br />{puntoInicio.etiqueta}</Popup>
             </Marker>
-            {resultado.segmentos.map((seg, i) => (
-              <Marker key={i} position={[seg.destino.latitud, seg.destino.longitud]} icon={iconRuta}>
-                <Popup>
-                  <b style={{ color: '#1A7FC1' }}>#{i + 1} {seg.destino.etiqueta}</b><br />
-                  <span style={{ fontSize: 12 }}>
-                    {seg.distanciaKm.toFixed(2)} km — {seg.tiempoEstimadoMin} min
-                    {seg.horaLlegadaEstimada && <><br />Llegada: {seg.horaLlegadaEstimada}</>}
-                  </span>
-                </Popup>
-              </Marker>
-            ))}
+            {resultado.segmentos.map((seg, i) => {
+              const esUltimo = i === resultado.segmentos.length - 1
+              const color = esUltimo ? '#DC2626' : '#1A7FC1'
+              return (
+                <Marker key={i} position={[seg.destino.latitud, seg.destino.longitud]} icon={makeNumberedIcon(i + 1, color)}>
+                  <Popup>
+                    <b style={{ color }}>#{i + 1} {seg.destino.etiqueta}</b><br />
+                    <span style={{ fontSize: 12 }}>
+                      {seg.distanciaKm.toFixed(2)} km — {seg.tiempoEstimadoMin} min
+                      {seg.horaLlegadaEstimada && <><br />Llegada: {seg.horaLlegadaEstimada}</>}
+                    </span>
+                  </Popup>
+                </Marker>
+              )
+            })}
           </>
         )}
       </MapContainer>
