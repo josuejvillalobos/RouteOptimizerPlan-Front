@@ -5,6 +5,7 @@ import { useRouteStore, colorParaIndice } from '../store/routeStore'
 import { useUIStore } from '../store/UiStore'
 import type { Stop } from '../types/routeTypes'
 import { CloudOutlined, ThunderboltOutlined, WarningOutlined } from '@ant-design/icons'
+import 'leaflet-polylinedecorator'
 
 delete (L.Icon.Default.prototype as any)._getIconUrl
 L.Icon.Default.mergeOptions({
@@ -38,6 +39,44 @@ const makeIcon = (color: string) => new L.Icon({
 })
 
 const iconInicio = makeIcon('green')
+
+function ArrowDecorator({ segmentos }: { segmentos: { geometria: [number, number][]; color: string }[] }) {
+  const map = useMap()
+
+  useEffect(() => {
+    const layers: L.Layer[] = []
+
+    segmentos.forEach(seg => {
+      if (seg.geometria.length < 2) return
+      const polyline = L.polyline(seg.geometria)
+      const decorator = (L as any).polylineDecorator(polyline, {
+        patterns: [
+          {
+            offset: '15%',
+            repeat: '30%',
+            symbol: (L as any).Symbol.arrowHead({
+              pixelSize: 10,
+              polygon: false,
+              pathOptions: {
+                color: seg.color,
+                weight: 2.5,
+                opacity: 0.9,
+              },
+            }),
+          },
+        ],
+      })
+      decorator.addTo(map)
+      layers.push(decorator)
+    })
+
+    return () => {
+      layers.forEach(l => map.removeLayer(l))
+    }
+  }, [segmentos, map])
+
+  return null
+}
 
 function FlyToController() {
   const { flyTo, clearFlyTo } = useRouteStore()
@@ -74,20 +113,30 @@ export default function MapView() {
     <div style={{ position: 'absolute', inset: 0 }}>
       <MapContainer center={[21.8818, -102.2916]} zoom={15} style={{ height: '100%', width: '100%' }} zoomControl={false}>
         <TileLayer
-          attribution='&copy; <a href="https://stadiamaps.com/">Stadia Maps</a>'
+          attribution='&copy; <a href="https://stadiamaps.com/">Stadia Maps</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
           url="https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png"
           maxZoom={20}
         />
+
+          <TileLayer
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          opacity={.5}
+          minZoom={14}
+          maxZoom={20}
+        />
+
         <FlyToController />
         <MapClickHandler />
         <PanelAutoClose />
 
-        {/* Inicio — siempre verde */}
+        {resultado && segmentosVisuales.length > 0 && (
+          <ArrowDecorator segmentos={segmentosVisuales} />
+        )}
+
         <Marker position={[puntoInicio.latitud, puntoInicio.longitud]} icon={iconInicio}>
           <Popup><b style={{ color: '#003F7F' }}>Inicio</b><br /><span style={{ fontSize: 12 }}>{puntoInicio.etiqueta}</span></Popup>
         </Marker>
 
-        {/* Paradas antes de optimizar — color i+1 */}
         {!resultado && paradas.map((p, i) => (
           <Marker key={i} position={[p.latitud, p.longitud]} icon={makeNumberedIcon(i + 1, colorParaIndice(i + 1))}>
             <Popup><b style={{ color: colorParaIndice(i + 1) }}>Parada {i + 1}</b><br /><span style={{ fontSize: 12 }}>{p.etiqueta}</span></Popup>
@@ -96,7 +145,6 @@ export default function MapView() {
 
         {resultado && (
           <>
-            {/* Segmento 0: Inicio→P1 verde, Segmento i: Pi→Pi+1 color i+1 */}
             {segmentosVisuales.length > 0 ? (
               segmentosVisuales.map((seg, i) => (
                 <Polyline key={i} positions={seg.geometria}
