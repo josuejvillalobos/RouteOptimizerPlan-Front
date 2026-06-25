@@ -16,8 +16,7 @@ export default function RoutePanel() {
     puntoInicio, paradas, transporte, resultado,
     loading, error, backendOk, clima,
     addParada, removeParada, setTransporte,
-    optimizar, limpiarResultado, setPuntoInicio, reset,
-  } = useRouteStore()
+    optimizar, limpiarResultado, setPuntoInicio, reset, retornarAlInicio, setRetornarAlInicio,  } = useRouteStore()
 
   const { panelOpen, setPanelOpen, origenPendiente, origenAnterior, cancelarOrigen } = useUIStore()
   const [showStops, setShowStops] = useState(true)
@@ -203,6 +202,38 @@ export default function RoutePanel() {
               {t === 'AUTO' ? 'Vehiculo' : 'A pie'}
             </button>
           ))}
+        </div>
+
+        <div
+          onClick={() => { setRetornarAlInicio(!retornarAlInicio); limpiarResultado() }}
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '8px 12px', borderRadius: 12, cursor: 'pointer',
+            background: retornarAlInicio ? '#f0fdf4' : '#f8fafc',
+            border: `1px solid ${retornarAlInicio ? '#86efac' : '#e2e8f0'}`,
+          }}
+        >
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: retornarAlInicio ? '#16a34a' : '#374151' }}>
+              Retornar al almacen
+            </div>
+            <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 1 }}>
+              Agregar segmento de regreso al inicio
+            </div>
+          </div>
+          <div style={{
+            width: 36, height: 20, borderRadius: 99,
+            background: retornarAlInicio ? '#16a34a' : '#d1d5db',
+            position: 'relative', transition: 'background 0.2s', flexShrink: 0,
+          }}>
+            <div style={{
+              width: 16, height: 16, borderRadius: '50%', background: '#fff',
+              position: 'absolute', top: 2,
+              left: retornarAlInicio ? 18 : 2,
+              transition: 'left 0.2s',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+            }} />
+          </div>
         </div>
 
         {clima && clima.factor > 1.0 && (

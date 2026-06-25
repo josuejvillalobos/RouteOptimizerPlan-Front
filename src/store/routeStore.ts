@@ -22,6 +22,8 @@ interface RouteStore {
   puntoInicio: Stop
   paradas: Stop[]
   transporte: TipoTransporte
+  retornarAlInicio: boolean
+  setRetornarAlInicio: (v: boolean) => void
   resultado: RutaOptimizada | null
   segmentosVisuales: { geometria: [number, number][]; color: string }[]
   loading: boolean
@@ -46,6 +48,8 @@ export const useRouteStore = create<RouteStore>((set, get) => ({
   puntoInicio: INICIO_DEFAULT,
   paradas: [],
   transporte: 'AUTO',
+  retornarAlInicio: false,
+  setRetornarAlInicio: (retornarAlInicio) => set({ retornarAlInicio }),
   resultado: null,
   segmentosVisuales: [],
   loading: false,
@@ -101,12 +105,13 @@ export const useRouteStore = create<RouteStore>((set, get) => ({
         paradas,
       })
 
-      // Calcular geometria real de calles para CADA segmento por separado
-      // para poder colorear cada tramo independientemente
+     
       try {
         const osrmPort = transporte === 'A_PIE' ? 5001 : 5000
         const perfil = transporte === 'A_PIE' ? 'foot' : 'driving'
+        const { retornarAlInicio } = get()
         const allPoints = [puntoInicio, ...result.ordenOptimizado]
+        if (retornarAlInicio) allPoints.push(puntoInicio)
 
         const segmentosVisuales: { geometria: [number, number][]; color: string }[] = []
 
@@ -125,8 +130,29 @@ export const useRouteStore = create<RouteStore>((set, get) => ({
           segmentosVisuales.push({ geometria, color })
         }
 
-        set({ resultado: result, segmentosVisuales, loading: false })
-      } catch {
+let distanciaRetorno = 0
+        if (retornarAlInicio && segmentosVisuales.length > 0) {
+          const ultimo = segmentosVisuales[segmentosVisuales.length - 1]
+          const coords2 = ultimo.geometria
+          if (coords2.length >= 2) {
+            const [lat1, lon1] = coords2[coords2.length - 1]
+            const [lat2, lon2] = [puntoInicio.latitud, puntoInicio.longitud]
+            const R = 6371
+            const dLat = (lat2 - lat1) * Math.PI / 180
+            const dLon = (lon2 - lon1) * Math.PI / 180
+            distanciaRetorno = R * 2 * Math.asin(Math.sqrt(
+              Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2
+            ))
+          }
+        }
+        set({
+          resultado: {
+            ...result,
+            distanciaTotalKm: result.distanciaTotalKm + distanciaRetorno,
+          },
+          segmentosVisuales,
+          loading: false,
+        })      } catch {
         set({ resultado: result, loading: false })
       }
     } catch (e: any) {
@@ -138,6 +164,7 @@ export const useRouteStore = create<RouteStore>((set, get) => ({
     puntoInicio: INICIO_DEFAULT,
     paradas: [],
     transporte: 'AUTO',
+    retornarAlInicio: false,
     resultado: null,
     segmentosVisuales: [],
     loading: false,
