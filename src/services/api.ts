@@ -51,14 +51,11 @@ export async function buscarDirecciones(query: string): Promise<NominatimResult[
     },
     headers: { 'User-Agent': 'MIAA-RouteOptimizer/1.0' },
   })
+  
   const data: NominatimResult[] = res.data
-  // Priorizar los que esten en Aguascalientes
-  return data.sort((a, b) => {
-    const inAgsA = inAgs(a) ? 0 : 1
-    const inAgsB = inAgs(b) ? 0 : 1
-    return inAgsA - inAgsB
-  })
-}
+  // Filtrar estrictamente solo Aguascalientes
+  return data.filter(inAgs)
+  }
 
 function inAgs(r: NominatimResult) {
   const lat = parseFloat(r.lat), lon = parseFloat(r.lon)

@@ -121,7 +121,8 @@ export const useRouteStore = create<RouteStore>((set, get) => ({
           const geometria: [number, number][] = osrmData.routes[0].geometry.coordinates.map(
             ([lon, lat]: [number, number]) => [lat, lon]
           )
-          segmentosVisuales.push({ geometria, color: colorParaIndice(i) })
+          const color = i === 0 ? '#22c55e' : colorParaIndice(i)
+          segmentosVisuales.push({ geometria, color })
         }
 
         set({ resultado: result, segmentosVisuales, loading: false })
