@@ -99,3 +99,18 @@ export async function getClima(): Promise<ClimateInfo> {
     viento: Math.round(c.windspeed_10m),
   }
 }
+
+export async function geocodificarInverso(lat: number, lon: number): Promise<string> {
+  try {
+    const res = await axios.get('https://nominatim.openstreetmap.org/reverse', {
+      params: { lat, lon, format: 'json', 'accept-language': 'es' },
+      headers: { 'User-Agent': 'MIAA-RouteOptimizer/1.0' },
+    })
+    const d = res.data.address
+    const nombre = d.road || d.pedestrian || d.path || d.neighbourhood || 'Ubicacion seleccionada'
+    const colonia = d.suburb || d.neighbourhood || d.city_district || ''
+    return colonia ? `${nombre}, ${colonia}` : nombre
+  } catch {
+    return `${lat.toFixed(5)}, ${lon.toFixed(5)}`
+  }
+}
