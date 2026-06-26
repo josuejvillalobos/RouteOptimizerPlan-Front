@@ -62,17 +62,20 @@ function FlyToController() {
   return null
 }
 
+let clickBloqueado = false
+
 function MapClickHandler() {
-  const { addParada, paradas, limpiarResultado } = useRouteStore()
+  const { addParada, limpiarResultado, resultado } = useRouteStore()
   useMapEvents({
     click(e) {
-      const { lat, lng } = e.latlng
-      geocodificarInverso(lat, lng).then(etiqueta => {
+      if (resultado) return
+      if (clickBloqueado) return
+      geocodificarInverso(e.latlng.lat, e.latlng.lng).then(etiqueta => {
         addParada({
           etiqueta,
           calle: etiqueta,
-          latitud: lat,
-          longitud: lng,
+          latitud: e.latlng.lat,
+          longitud: e.latlng.lng,
         } as Stop)
         limpiarResultado()
       })
@@ -88,7 +91,7 @@ function PanelAutoClose() {
 }
 
 export default function MapView() {
-  const { puntoInicio, paradas, resultado, segmentosVisuales, clima, loadClima, backendOk, setPuntoInicio, limpiarResultado } = useRouteStore()
+  const { puntoInicio, paradas, resultado, segmentosVisuales, alternativas, alternativaActiva, setAlternativaActiva, clima, loadClima, backendOk, setPuntoInicio, limpiarResultado } = useRouteStore()
   const { panelOpen, togglePanel, setOrigenPendiente, setOrigenAnterior } = useUIStore()
   useEffect(() => { loadClima() }, [])
 
@@ -133,25 +136,61 @@ export default function MapView() {
             <Popup><b style={{ color: colorParaIndice(i + 1) }}>Parada {i + 1}</b><br /><span style={{ fontSize: 12 }}>{p.etiqueta}</span></Popup>
           </Marker>
         ))}
-
-        {resultado && (
+{resultado && (
           <>
+            {alternativas.map((alt, i) => {
+              const esActiva = alternativaActiva === i + 1
+              return (
+                <Polyline
+                  key={'alt-' + i}
+                  positions={alt.geometria}
+                  pathOptions={{
+                    color: esActiva ? '#1A7FC1' : '#94a3b8',
+                    weight: esActiva ? 6 : 5,
+                    opacity: esActiva ? 0.9 : 0.4,
+                    lineCap: 'round', lineJoin: 'round',
+                  }}
+                  eventHandlers={{
+                    click(e) {
+                      clickBloqueado = true
+                      setTimeout(() => { clickBloqueado = false }, 300)
+                      setAlternativaActiva(i + 1)
+                    },
+                    mouseover(e) { if (!esActiva) e.target.setStyle({ opacity: 0.7, weight: 6 }) },
+                    mouseout(e) { if (!esActiva) e.target.setStyle({ opacity: 0.4, weight: 5 }) },
+                  }}
+                />
+              )
+            })}
+
+            {/* Ruta activa — encima de las alternativas */}
             {segmentosVisuales.length > 0
               ? segmentosVisuales.map((seg, i) => (
-                  <Polyline key={i} positions={seg.geometria} pathOptions={{ color: seg.color, weight: 6, opacity: 0.9, lineCap: 'round', lineJoin: 'round' }} />
+                  <Polyline key={i} positions={seg.geometria}
+                    pathOptions={{
+                      color: alternativaActiva === 0 ? seg.color : '#94a3b8',
+                      weight: alternativaActiva === 0 ? 6 : 4,
+                      opacity: alternativaActiva === 0 ? 0.9 : 0.35,
+                      lineCap: 'round', lineJoin: 'round',
+                    }} />
                 ))
               : resultado.segmentos.map((s, i) => (
-                  <Polyline key={i} positions={[[s.origen.latitud, s.origen.longitud], [s.destino.latitud, s.destino.longitud]]}
+                  <Polyline key={i}
+                    positions={[[s.origen.latitud, s.origen.longitud], [s.destino.latitud, s.destino.longitud]]}
                     pathOptions={{ color: i === 0 ? '#22c55e' : colorParaIndice(i), weight: 5, opacity: 0.7, dashArray: '8 6' }} />
                 ))
             }
+
             {resultado.segmentos.map((seg, i) => {
               const color = colorParaIndice(i + 1)
               return (
                 <Marker key={i} position={[seg.destino.latitud, seg.destino.longitud]} icon={makeNumberedIcon(i + 1, color)}>
                   <Popup>
                     <b style={{ color }}>#{i + 1} {seg.destino.etiqueta}</b><br />
-                    <span style={{ fontSize: 12 }}>{seg.distanciaKm.toFixed(2)} km — {seg.tiempoEstimadoMin} min{seg.horaLlegadaEstimada && <><br />Llegada: {seg.horaLlegadaEstimada}</>}</span>
+                    <span style={{ fontSize: 12 }}>
+                      {seg.distanciaKm.toFixed(2)} km — {seg.tiempoEstimadoMin} min
+                      {seg.horaLlegadaEstimada && <><br />Llegada: {seg.horaLlegadaEstimada}</>}
+                    </span>
                   </Popup>
                 </Marker>
               )

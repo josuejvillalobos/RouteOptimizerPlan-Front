@@ -27,6 +27,9 @@ interface RouteStore {
   paradasManual: Stop[]
   resultado: RutaOptimizada | null
   segmentosVisuales: { geometria: [number, number][]; color: string }[]
+  alternativas: { geometria: [number, number][]; distanciaKm: number; tiempoMin: number }[]
+  alternativaActiva: number
+  setAlternativaActiva: (i: number) => void
   loading: boolean
   error: string | null
   backendOk: boolean
@@ -52,20 +55,35 @@ async function calcularSegmentosOSRM(
   allPoints: Stop[],
   osrmPort: number,
   perfil: string
-): Promise<{ segmentosVisuales: { geometria: [number, number][]; color: string }[]; distanciaTotal: number; tiempoTotal: number }> {
+): Promise<{
+  segmentosVisuales: { geometria: [number, number][]; color: string }[]
+  distanciaTotal: number
+  tiempoTotal: number
+  alternativas: { geometria: [number, number][]; distanciaKm: number; tiempoMin: number }[]
+}> {
   const segmentosVisuales: { geometria: [number, number][]; color: string }[] = []
+  const alternativas: { geometria: [number, number][]; distanciaKm: number; tiempoMin: number }[] = []
   let distanciaTotal = 0
   let tiempoTotal = 0
+
+  console.log('calcularSegmentosOSRM iniciando con', allPoints.length, 'puntos')
 
   for (let i = 0; i < allPoints.length - 1; i++) {
     const a = allPoints[i]
     const b = allPoints[i + 1]
     const coords = `${a.longitud},${a.latitud};${b.longitud},${b.latitud}`
-    const osrmRes = await fetch(
-      `http://localhost:${osrmPort}/route/v1/${perfil}/${coords}?overview=full&geometries=geojson`
-    )
+    const url = `http://localhost:${osrmPort}/route/v1/${perfil}/${coords}?alternatives=3&overview=full&geometries=geojson`
+    console.log(`Segmento ${i} URL:`, url)
+
+    const osrmRes = await fetch(url)
     const osrmData = await osrmRes.json()
-    const route = osrmData.routes[0]
+    const routes = osrmData.routes
+
+    console.log(`Segmento ${i}: ${routes?.length ?? 0} rutas encontradas`)
+
+    if (!routes || routes.length === 0) continue
+
+    const route = routes[0]
     const geometria: [number, number][] = route.geometry.coordinates.map(
       ([lon, lat]: [number, number]) => [lat, lon]
     )
@@ -73,9 +91,24 @@ async function calcularSegmentosOSRM(
     segmentosVisuales.push({ geometria, color })
     distanciaTotal += route.distance / 1000
     tiempoTotal += Math.round(route.duration / 60)
+
+    if (alternativas.length === 0 && routes.length > 1) {
+      console.log(`Agregando ${routes.length - 1} alternativas`)
+      routes.slice(1).forEach((alt: any) => {
+        const geomAlt: [number, number][] = alt.geometry.coordinates.map(
+          ([lon, lat]: [number, number]) => [lat, lon]
+        )
+        alternativas.push({
+          geometria: geomAlt,
+          distanciaKm: alt.distance / 1000,
+          tiempoMin: Math.round(alt.duration / 60),
+        })
+      })
+    }
   }
 
-  return { segmentosVisuales, distanciaTotal, tiempoTotal }
+  console.log('calcularSegmentosOSRM terminado:', segmentosVisuales.length, 'segmentos,', alternativas.length, 'alternativas')
+  return { segmentosVisuales, distanciaTotal, tiempoTotal, alternativas }
 }
 
 export const useRouteStore = create<RouteStore>((set, get) => ({
@@ -87,6 +120,9 @@ export const useRouteStore = create<RouteStore>((set, get) => ({
   paradasManual: [],
   resultado: null,
   segmentosVisuales: [],
+  alternativas: [],
+  alternativaActiva: 0,
+  setAlternativaActiva: (alternativaActiva) => set({ alternativaActiva }),
   loading: false,
   error: null,
   backendOk: false,
@@ -101,7 +137,7 @@ export const useRouteStore = create<RouteStore>((set, get) => ({
   setModoOrden: (modoOrden) => set({ modoOrden }),
   setParadasManual: (paradasManual) => set({ paradasManual }),
   setBackendOk: (backendOk) => set({ backendOk }),
-  limpiarResultado: () => set({ resultado: null, error: null, segmentosVisuales: [] }),
+  limpiarResultado: () => set({ resultado: null, error: null, segmentosVisuales: [], alternativas: [], alternativaActiva: 0 }),
   clearFlyTo: () => set({ flyTo: null }),
 
   loadClima: async () => {
@@ -122,14 +158,18 @@ export const useRouteStore = create<RouteStore>((set, get) => ({
       try {
         const osrmPort = transporte === 'A_PIE' ? 5001 : 5000
         const perfil = transporte === 'A_PIE' ? 'foot' : 'driving'
-        const allPoints = [puntoInicio, ...result.ordenOptimizado]
-        if (retornarAlInicio) allPoints.push(puntoInicio)
-        const { segmentosVisuales, distanciaTotal } = await calcularSegmentosOSRM(allPoints, osrmPort, perfil)
+        const ordenSinInicio = result.ordenOptimizado.filter(
+          p => !(Math.abs(p.latitud - puntoInicio.latitud) < 0.0001 && Math.abs(p.longitud - puntoInicio.longitud) < 0.0001)
+        )
+        const allPoints = [puntoInicio, ...ordenSinInicio]
+        console.log('Iniciando OSRM con', allPoints.length, 'puntos, puerto', osrmPort)
+        const { segmentosVisuales, distanciaTotal, alternativas } = await calcularSegmentosOSRM(allPoints, osrmPort, perfil)
         set({
           resultado: { ...result, distanciaTotalKm: distanciaTotal },
-          segmentosVisuales, loading: false,
+          segmentosVisuales, alternativas, alternativaActiva: 0, loading: false,
         })
-      } catch {
+      } catch (err) {
+        console.error('Error en OSRM:', err)
         set({ resultado: result, loading: false })
       }
     } catch (e: any) {
@@ -173,7 +213,8 @@ export const useRouteStore = create<RouteStore>((set, get) => ({
     puntoInicio: INICIO_DEFAULT,
     paradas: [], transporte: 'AUTO', retornarAlInicio: false,
     modoOrden: 'optimizado', paradasManual: [],
-    resultado: null, segmentosVisuales: [], loading: false, error: null,
+    resultado: null, segmentosVisuales: [], alternativas: [],
+    alternativaActiva: 0, loading: false, error: null,
     flyTo: { lat: 21.8818, lon: -102.2916, zoom: 13 },
   }),
 }))

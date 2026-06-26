@@ -68,7 +68,8 @@ export default function RoutePanel() {
     addParada, removeParada, setTransporte,
     optimizar, optimizarManual, limpiarResultado, setPuntoInicio, reset,
     retornarAlInicio, setRetornarAlInicio,
-    modoOrden, setModoOrden, paradasManual, setParadasManual,  } = useRouteStore()
+    modoOrden, setModoOrden, paradasManual, setParadasManual,
+    alternativas, alternativaActiva, setAlternativaActiva, } = useRouteStore()
 
   const { panelOpen, setPanelOpen, origenPendiente, origenAnterior, cancelarOrigen } = useUIStore()
   const [showStops, setShowStops] = useState(true)
@@ -383,6 +384,60 @@ export default function RoutePanel() {
                   {resultado.condicionClimatica} · factor {resultado.factorClimatico?.toFixed(2)}
                 </div>
               )}
+
+              {/* Alternativas */}
+              {alternativas.length > 0 && (
+                <div style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9' }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 6 }}>
+                    Rutas alternativas
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <div
+                      onClick={() => setAlternativaActiva(0)}
+                      style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        padding: '6px 10px', borderRadius: 10, cursor: 'pointer',
+                        background: alternativaActiva === 0 ? '#EBF5FF' : '#f8fafc',
+                        border: `1.5px solid ${alternativaActiva === 0 ? '#1A7FC1' : '#e2e8f0'}`,
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <div style={{ width: 10, height: 4, borderRadius: 2, background: '#1A7FC1' }} />
+                        <span style={{ fontSize: 11, fontWeight: 700, color: alternativaActiva === 0 ? '#1A7FC1' : '#374151' }}>
+                          Ruta principal
+                        </span>
+                      </div>
+                      <span style={{ fontSize: 10, color: '#6b7280' }}>
+                        {resultado.distanciaTotalKm.toFixed(1)} km · {resultado.tiempoEstimadoMin} min
+                      </span>
+                    </div>
+                    {alternativas.map((alt, i) => (
+                      <div
+                        key={i}
+                        onClick={() => setAlternativaActiva(i + 1)}
+                        style={{
+                          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                          padding: '6px 10px', borderRadius: 10, cursor: 'pointer',
+                          background: alternativaActiva === i + 1 ? '#f1f5f9' : '#f8fafc',
+                          border: `1.5px solid ${alternativaActiva === i + 1 ? '#64748b' : '#e2e8f0'}`,
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <div style={{ width: 10, height: 4, borderRadius: 2, background: '#94a3b8' }} />
+                          <span style={{ fontSize: 11, fontWeight: 600, color: '#374151' }}>
+                            Alternativa {i + 1}
+                          </span>
+                        </div>
+                        <span style={{ fontSize: 10, color: '#6b7280' }}>
+                          {alt.distanciaKm.toFixed(1)} km · {alt.tiempoMin} min
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+
 
               <div style={{ maxHeight: 200, overflowY: 'auto' }}>
                 {resultado.segmentos.map((seg, i) => (

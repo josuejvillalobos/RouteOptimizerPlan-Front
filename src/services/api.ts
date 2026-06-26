@@ -35,7 +35,6 @@ export interface NominatimResult {
 
 export async function buscarDirecciones(query: string): Promise<NominatimResult[]> {
   if (query.length < 2) return []
-  // Sin bounded para no perder negocios — viewbox solo para rankeo
   const res = await axios.get('https://nominatim.openstreetmap.org/search', {
     params: {
       q: query,
@@ -49,7 +48,7 @@ export async function buscarDirecciones(query: string): Promise<NominatimResult[
       bounded: 0,
       'accept-language': 'es',
     },
-    headers: { 'User-Agent': 'MIAA-RouteOptimizer/1.0' },
+    headers: {},
   })
   
   const data: NominatimResult[] = res.data
@@ -104,7 +103,7 @@ export async function geocodificarInverso(lat: number, lon: number): Promise<str
   try {
     const res = await axios.get('https://nominatim.openstreetmap.org/reverse', {
       params: { lat, lon, format: 'json', 'accept-language': 'es' },
-      headers: { 'User-Agent': 'MIAA-RouteOptimizer/1.0' },
+      headers: {},
     })
     const d = res.data.address
     const nombre = d.road || d.pedestrian || d.path || d.neighbourhood || 'Ubicacion seleccionada'
