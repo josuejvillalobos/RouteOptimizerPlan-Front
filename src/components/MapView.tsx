@@ -1,13 +1,13 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMapEvents, useMap } from 'react-leaflet'
-import { useRef } from 'react'
 import L from 'leaflet'
 import { useRouteStore, colorParaIndice } from '../store/routeStore'
 import { geocodificarInverso } from '../services/api'
 import { useUIStore } from '../store/UiStore'
 import type { Stop } from '../types/routeTypes'
-import { CloudOutlined, ThunderboltOutlined, WarningOutlined } from '@ant-design/icons'
+import { CloudOutlined, ThunderboltOutlined, WarningOutlined, CloseOutlined } from '@ant-design/icons'
 import 'leaflet-polylinedecorator'
+import AlertsPanel from './AlertsPanel'
 
 delete (L.Icon.Default.prototype as any)._getIconUrl
 L.Icon.Default.mergeOptions({
@@ -62,17 +62,21 @@ function FlyToController() {
   return null
 }
 
+let clickBloqueado = false
+
 function MapClickHandler() {
-  const { addParada, paradas, limpiarResultado } = useRouteStore()
+  const { addParada, limpiarResultado, resultado } = useRouteStore()
   useMapEvents({
     click(e) {
-      const { lat, lng } = e.latlng
-      geocodificarInverso(lat, lng).then(etiqueta => {
+      if (resultado) return
+      if (clickBloqueado || (window as any).__clickBloqueado) return
+      if ((window as any).__modalAbierto) return
+      geocodificarInverso(e.latlng.lat, e.latlng.lng).then(etiqueta => {
         addParada({
           etiqueta,
           calle: etiqueta,
-          latitud: lat,
-          longitud: lng,
+          latitud: e.latlng.lat,
+          longitud: e.latlng.lng,
         } as Stop)
         limpiarResultado()
       })
@@ -88,8 +92,8 @@ function PanelAutoClose() {
 }
 
 export default function MapView() {
-  const { puntoInicio, paradas, resultado, segmentosVisuales, clima, loadClima, backendOk, setPuntoInicio, limpiarResultado } = useRouteStore()
-  const { panelOpen, togglePanel, setOrigenPendiente, setOrigenAnterior } = useUIStore()
+  const { puntoInicio, paradas, resultado, segmentosVisuales, alternativas, alternativaActiva, setAlternativaActiva, clima, loadClima, backendOk, setPuntoInicio, limpiarResultado } = useRouteStore()
+  const { panelOpen, togglePanel, setOrigenPendiente, setOrigenAnterior, modoAlerta, setModoAlerta } = useUIStore()
   useEffect(() => { loadClima() }, [])
 
   const markerInicioRef = useRef<L.Marker | null>(null)
@@ -136,28 +140,66 @@ export default function MapView() {
 
         {resultado && (
           <>
+            {alternativas.map((alt, i) => {
+              const esActiva = alternativaActiva === i + 1
+              return (
+                <Polyline
+                  key={'alt-' + i}
+                  positions={alt.geometria}
+                  pathOptions={{
+                    color: esActiva ? '#1A7FC1' : '#94a3b8',
+                    weight: esActiva ? 6 : 5,
+                    opacity: esActiva ? 0.9 : 0.4,
+                    lineCap: 'round', lineJoin: 'round',
+                  }}
+                  eventHandlers={{
+                    click(e) {
+                      clickBloqueado = true
+                      setTimeout(() => { clickBloqueado = false }, 300)
+                      setAlternativaActiva(i + 1)
+                    },
+                    mouseover(e) { if (!esActiva) e.target.setStyle({ opacity: 0.7, weight: 6 }) },
+                    mouseout(e) { if (!esActiva) e.target.setStyle({ opacity: 0.4, weight: 5 }) },
+                  }}
+                />
+              )
+            })}
+
             {segmentosVisuales.length > 0
               ? segmentosVisuales.map((seg, i) => (
-                  <Polyline key={i} positions={seg.geometria} pathOptions={{ color: seg.color, weight: 6, opacity: 0.9, lineCap: 'round', lineJoin: 'round' }} />
+                  <Polyline key={i} positions={seg.geometria}
+                    pathOptions={{
+                      color: alternativaActiva === 0 ? seg.color : '#94a3b8',
+                      weight: alternativaActiva === 0 ? 6 : 4,
+                      opacity: alternativaActiva === 0 ? 0.9 : 0.35,
+                      lineCap: 'round', lineJoin: 'round',
+                    }} />
                 ))
               : resultado.segmentos.map((s, i) => (
-                  <Polyline key={i} positions={[[s.origen.latitud, s.origen.longitud], [s.destino.latitud, s.destino.longitud]]}
+                  <Polyline key={i}
+                    positions={[[s.origen.latitud, s.origen.longitud], [s.destino.latitud, s.destino.longitud]]}
                     pathOptions={{ color: i === 0 ? '#22c55e' : colorParaIndice(i), weight: 5, opacity: 0.7, dashArray: '8 6' }} />
                 ))
             }
+
             {resultado.segmentos.map((seg, i) => {
               const color = colorParaIndice(i + 1)
               return (
                 <Marker key={i} position={[seg.destino.latitud, seg.destino.longitud]} icon={makeNumberedIcon(i + 1, color)}>
                   <Popup>
                     <b style={{ color }}>#{i + 1} {seg.destino.etiqueta}</b><br />
-                    <span style={{ fontSize: 12 }}>{seg.distanciaKm.toFixed(2)} km — {seg.tiempoEstimadoMin} min{seg.horaLlegadaEstimada && <><br />Llegada: {seg.horaLlegadaEstimada}</>}</span>
+                    <span style={{ fontSize: 12 }}>
+                      {seg.distanciaKm.toFixed(2)} km — {seg.tiempoEstimadoMin} min
+                      {seg.horaLlegadaEstimada && <><br />Llegada: {seg.horaLlegadaEstimada}</>}
+                    </span>
                   </Popup>
                 </Marker>
               )
             })}
           </>
         )}
+
+        <AlertsPanel />
       </MapContainer>
 
       {clima && (
@@ -181,6 +223,37 @@ export default function MapView() {
           Haz clic en el mapa para agregar paradas
         </div>
       )}
+
+      {/* Botón alertas — fuera del MapContainer */}
+      <div style={{
+        position: 'absolute', bottom: 32, right: 16, zIndex: 1000,
+        display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8,
+      }}>
+        {modoAlerta && (
+          <div style={{
+            background: 'rgba(239,68,68,0.92)', color: '#fff',
+            fontSize: 11, fontWeight: 700, padding: '6px 12px',
+            borderRadius: 99, backdropFilter: 'blur(8px)', whiteSpace: 'nowrap',
+            boxShadow: '0 4px 12px rgba(239,68,68,0.4)',
+          }}>
+            Toca el punto del incidente
+          </div>
+        )}
+        <button
+          onClick={() => setModoAlerta(!modoAlerta)}
+          style={{
+            width: 48, height: 48, borderRadius: 14,
+            background: modoAlerta ? '#ef4444' : '#003F7F',
+            border: 'none', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.25)',
+            color: '#fff', fontSize: 18,
+            transition: 'background 0.2s',
+          }}
+        >
+          {modoAlerta ? <CloseOutlined /> : <WarningOutlined />}
+        </button>
+      </div>
 
       {!panelOpen && (
         <button onClick={togglePanel} style={{ position: 'absolute', top: 16, left: 16, zIndex: 1000, width: 48, height: 48, borderRadius: 14, background: '#003F7F', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 20px rgba(0,63,127,0.4)', color: '#fff', fontSize: 18 }} aria-label="Abrir panel">☰</button>

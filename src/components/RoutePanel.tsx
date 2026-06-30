@@ -10,20 +10,90 @@ import { useRouteStore, colorParaIndice } from '../store/routeStore'
 import { useUIStore } from '../store/UiStore'
 import type { TipoTransporte } from '../types/routeTypes'
 import SearchBox from './SearchBox'
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+  arrayMove,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+
+function SortableParada({ parada, index, onRemove }: { parada: any; index: number; onRemove: () => void }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: parada.etiqueta + index })
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.5 : 1,
+        display: 'flex', alignItems: 'center', gap: 8,
+        background: isDragging ? '#f0f7ff' : '#f8fafc',
+        borderRadius: 12, padding: '7px 10px',
+        border: `1px solid ${colorParaIndice(index + 1)}30`,
+        cursor: 'default',
+      }}
+    >
+      <div {...attributes} {...listeners} style={{ cursor: 'grab', color: '#d1d5db', fontSize: 14, flexShrink: 0, padding: '0 2px' }}>
+        ⠿
+      </div>
+      <span style={{ width: 18, height: 18, borderRadius: '50%', background: colorParaIndice(index + 1), color: '#fff', fontSize: 9, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{index + 1}</span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 11, fontWeight: 600, color: '#374151', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{parada.etiqueta}</div>
+        <div style={{ fontSize: 10, color: '#9ca3af', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{parada.calle.split(',').slice(0, 2).join(',')}</div>
+      </div>
+      <button onClick={onRemove} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, borderRadius: 8, color: '#d1d5db' }}
+        onMouseEnter={e => (e.currentTarget.style.color = '#ef4444')}
+        onMouseLeave={e => (e.currentTarget.style.color = '#d1d5db')}>
+        <DeleteOutlined style={{ fontSize: 10 }} />
+      </button>
+    </div>
+  )
+} 
 
 export default function RoutePanel() {
   const {
     puntoInicio, paradas, transporte, resultado,
     loading, error, backendOk, clima,
     addParada, removeParada, setTransporte,
-    optimizar, limpiarResultado, setPuntoInicio, reset,
-  } = useRouteStore()
+    optimizar, optimizarManual, limpiarResultado, setPuntoInicio, reset,
+    retornarAlInicio, setRetornarAlInicio,
+    modoOrden, setModoOrden, paradasManual, setParadasManual,
+    alternativas, alternativaActiva, setAlternativaActiva, } = useRouteStore()
 
   const { panelOpen, setPanelOpen, origenPendiente, origenAnterior, cancelarOrigen } = useUIStore()
   const [showStops, setShowStops] = useState(true)
   const [showResult, setShowResult] = useState(true)
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  )
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const listaActual = modoOrden === 'manual' && paradasManual.length > 0 ? paradasManual : paradas
+    const oldIndex = listaActual.findIndex((p, i) => p.etiqueta + i === active.id)
+    const newIndex = listaActual.findIndex((p, i) => p.etiqueta + i === over.id)
+    const nuevaLista = arrayMove(listaActual, oldIndex, newIndex)
+    setParadasManual(nuevaLista)
+    setModoOrden('manual')
+    limpiarResultado()
+  }
 
   return (
+
+    
     <div
       id="route-panel-scroll"
       style={{
@@ -155,22 +225,45 @@ export default function RoutePanel() {
                 <span>O haz clic directamente en el mapa</span>
               </div>
               {paradas.length > 0 && (
-                <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 160, overflowY: 'auto' }}>
-                  {paradas.map((p, i) => (
-                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#f8fafc', borderRadius: 12, padding: '7px 10px', border: `1px solid ${colorParaIndice(i + 1)}30` }}>
-                      <span style={{ width: 18, height: 18, borderRadius: '50%', background: colorParaIndice(i + 1), color: '#fff', fontSize: 9, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{i + 1}</span>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 11, fontWeight: 600, color: '#374151', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.etiqueta}</div>
-                        <div style={{ fontSize: 10, color: '#9ca3af', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.calle.split(',').slice(0, 2).join(',')}</div>
-                      </div>
-                      <button onClick={() => removeParada(i)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, borderRadius: 8, color: '#d1d5db' }}
-                        onMouseEnter={e => (e.currentTarget.style.color = '#ef4444')}
-                        onMouseLeave={e => (e.currentTarget.style.color = '#d1d5db')}>
-                        <DeleteOutlined style={{ fontSize: 10 }} />
+                <>
+                  {/* Toggle modo orden */}
+                  <div style={{ display: 'flex', gap: 6, marginTop: 8, marginBottom: 4 }}>
+                    {(['optimizado', 'manual'] as const).map(modo => (
+                      <button key={modo} onClick={() => { setModoOrden(modo); limpiarResultado() }}
+                        style={{
+                          flex: 1, fontSize: 10, fontWeight: 700, padding: '5px 0',
+                          borderRadius: 8, border: '1.5px solid', cursor: 'pointer',
+                          background: modoOrden === modo ? '#003F7F' : '#fff',
+                          borderColor: modoOrden === modo ? '#003F7F' : '#e2e8f0',
+                          color: modoOrden === modo ? '#fff' : '#6b7280',
+                        }}>
+                        {modo === 'optimizado' ? 'Orden sistema' : 'Orden manual'}
                       </button>
+                    ))}
+                  </div>
+                  {modoOrden === 'manual' && (
+                    <div style={{ fontSize: 10, color: '#9ca3af', marginBottom: 4, paddingLeft: 2 }}>
+                      Arrastra ⠿ para reordenar
                     </div>
-                  ))}
-                </div>
+                  )}
+                  <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                    <SortableContext
+                      items={(modoOrden === 'manual' && paradasManual.length > 0 ? paradasManual : paradas).map((p, i) => p.etiqueta + i)}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 160, overflowY: 'auto' }}>
+                        {(modoOrden === 'manual' && paradasManual.length > 0 ? paradasManual : paradas).map((p, i) => (
+                          <SortableParada
+                            key={p.etiqueta + i}
+                            parada={p}
+                            index={i}
+                            onRemove={() => removeParada(i)}
+                          />
+                        ))}
+                      </div>
+                    </SortableContext>
+                  </DndContext>
+                </>
               )}
               {paradas.length === 0 && (
                 <div style={{ marginTop: 8, padding: '16px 12px', textAlign: 'center', fontSize: 11, color: '#9ca3af', border: '1.5px dashed #e5e7eb', borderRadius: 12 }}>
@@ -205,6 +298,38 @@ export default function RoutePanel() {
           ))}
         </div>
 
+        <div
+          onClick={() => { setRetornarAlInicio(!retornarAlInicio); limpiarResultado() }}
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '8px 12px', borderRadius: 12, cursor: 'pointer',
+            background: retornarAlInicio ? '#f0fdf4' : '#f8fafc',
+            border: `1px solid ${retornarAlInicio ? '#86efac' : '#e2e8f0'}`,
+          }}
+        >
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: retornarAlInicio ? '#16a34a' : '#374151' }}>
+              Retornar al almacen
+            </div>
+            <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 1 }}>
+              Agregar segmento de regreso al inicio
+            </div>
+          </div>
+          <div style={{
+            width: 36, height: 20, borderRadius: 99,
+            background: retornarAlInicio ? '#16a34a' : '#d1d5db',
+            position: 'relative', transition: 'background 0.2s', flexShrink: 0,
+          }}>
+            <div style={{
+              width: 16, height: 16, borderRadius: '50%', background: '#fff',
+              position: 'absolute', top: 2,
+              left: retornarAlInicio ? 18 : 2,
+              transition: 'left 0.2s',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+            }} />
+          </div>
+        </div>
+
         {clima && clima.factor > 1.0 && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 12, background: clima.factor >= 1.3 ? '#fef2f2' : '#fffbeb', border: `1px solid ${clima.factor >= 1.3 ? '#fecaca' : '#fde68a'}`, fontSize: 11, fontWeight: 600, color: clima.factor >= 1.3 ? '#dc2626' : '#b45309' }}>
             <CloudOutlined />
@@ -212,8 +337,7 @@ export default function RoutePanel() {
           </div>
         )}
 
-        <button onClick={optimizar} disabled={loading}
-          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px 0', borderRadius: 14, border: 'none', cursor: loading ? 'not-allowed' : 'pointer', background: '#1A7FC1', color: '#fff', fontSize: 13, fontWeight: 800, opacity: loading ? 0.6 : 1, boxShadow: '0 4px 16px rgba(26,127,193,0.35)', transition: 'all 0.15s' }}>
+        <button onClick={modoOrden === 'manual' ? optimizarManual : optimizar} disabled={loading}          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px 0', borderRadius: 14, border: 'none', cursor: loading ? 'not-allowed' : 'pointer', background: '#1A7FC1', color: '#fff', fontSize: 13, fontWeight: 800, opacity: loading ? 0.6 : 1, boxShadow: '0 4px 16px rgba(26,127,193,0.35)', transition: 'all 0.15s' }}>
           {loading ? <LoadingOutlined spin /> : <ThunderboltOutlined />}
           {loading ? 'Calculando ruta...' : 'Calcular Ruta Optima'}
         </button>
@@ -260,6 +384,60 @@ export default function RoutePanel() {
                   {resultado.condicionClimatica} · factor {resultado.factorClimatico?.toFixed(2)}
                 </div>
               )}
+
+              {/* Alternativas */}
+              {alternativas.length > 0 && (
+                <div style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9' }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 6 }}>
+                    Rutas alternativas
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <div
+                      onClick={() => setAlternativaActiva(0)}
+                      style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        padding: '6px 10px', borderRadius: 10, cursor: 'pointer',
+                        background: alternativaActiva === 0 ? '#EBF5FF' : '#f8fafc',
+                        border: `1.5px solid ${alternativaActiva === 0 ? '#1A7FC1' : '#e2e8f0'}`,
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <div style={{ width: 10, height: 4, borderRadius: 2, background: '#1A7FC1' }} />
+                        <span style={{ fontSize: 11, fontWeight: 700, color: alternativaActiva === 0 ? '#1A7FC1' : '#374151' }}>
+                          Ruta principal
+                        </span>
+                      </div>
+                      <span style={{ fontSize: 10, color: '#6b7280' }}>
+                        {resultado.distanciaTotalKm.toFixed(1)} km · {resultado.tiempoEstimadoMin} min
+                      </span>
+                    </div>
+                    {alternativas.map((alt, i) => (
+                      <div
+                        key={i}
+                        onClick={() => setAlternativaActiva(i + 1)}
+                        style={{
+                          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                          padding: '6px 10px', borderRadius: 10, cursor: 'pointer',
+                          background: alternativaActiva === i + 1 ? '#f1f5f9' : '#f8fafc',
+                          border: `1.5px solid ${alternativaActiva === i + 1 ? '#64748b' : '#e2e8f0'}`,
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <div style={{ width: 10, height: 4, borderRadius: 2, background: '#94a3b8' }} />
+                          <span style={{ fontSize: 11, fontWeight: 600, color: '#374151' }}>
+                            Alternativa {i + 1}
+                          </span>
+                        </div>
+                        <span style={{ fontSize: 10, color: '#6b7280' }}>
+                          {alt.distanciaKm.toFixed(1)} km · {alt.tiempoMin} min
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+
 
               <div style={{ maxHeight: 200, overflowY: 'auto' }}>
                 {resultado.segmentos.map((seg, i) => (
