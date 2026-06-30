@@ -10,6 +10,8 @@ interface UIStore {
   setOrigenPendiente: (pos: OrigenPos | null) => void
   setOrigenAnterior: (pos: OrigenPos | null) => void
   cancelarOrigen: () => void
+  modoAlerta: boolean
+  setModoAlerta: (v: boolean) => void
 }
 
 export const useUIStore = create<UIStore>((set) => ({
@@ -21,4 +23,6 @@ export const useUIStore = create<UIStore>((set) => ({
   setOrigenPendiente: (pos) => set({ origenPendiente: pos }),
   setOrigenAnterior: (pos) => set({ origenAnterior: pos }),
   cancelarOrigen: () => set({ origenPendiente: null, origenAnterior: null }),
+  modoAlerta: false,
+  setModoAlerta: (modoAlerta) => set({ modoAlerta })
 }))

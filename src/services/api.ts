@@ -50,11 +50,9 @@ export async function buscarDirecciones(query: string): Promise<NominatimResult[
     },
     headers: {},
   })
-  
   const data: NominatimResult[] = res.data
-  // Filtrar estrictamente solo Aguascalientes
   return data.filter(inAgs)
-  }
+}
 
 function inAgs(r: NominatimResult) {
   const lat = parseFloat(r.lat), lon = parseFloat(r.lon)
@@ -70,7 +68,6 @@ export interface ClimateInfo {
 }
 
 export async function getClima(): Promise<ClimateInfo> {
-  // timezone=America/Mexico_City para obtener la hora local correcta
   const res = await axios.get('https://api.open-meteo.com/v1/forecast', {
     params: {
       latitude: 21.8818,
@@ -112,4 +109,45 @@ export async function geocodificarInverso(lat: number, lon: number): Promise<str
   } catch {
     return `${lat.toFixed(5)}, ${lon.toFixed(5)}`
   }
+}
+
+export interface Alert {
+  id: string
+  tipo: string
+  descripcion?: string
+  latitud: number
+  longitud: number
+  usuarioId: string
+  creadoEn: string
+  expiraEn: string
+  activa: boolean
+  vecesReportada: number
+}
+
+export async function getAlertasActivas(): Promise<Alert[]> {
+  await getToken()
+  const res = await axios.get(`${BASE_URL}/alertas/activas`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  return res.data
+}
+
+export async function crearAlerta(data: {
+  tipo: string
+  descripcion?: string
+  latitud: number
+  longitud: number
+}): Promise<Alert> {
+  await getToken()
+  const res = await axios.post(`${BASE_URL}/alertas`, data, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  return res.data
+}
+
+export async function resolverAlerta(id: string): Promise<void> {
+  await getToken()
+  await axios.patch(`${BASE_URL}/alertas/${id}/resolver`, {}, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
 }
