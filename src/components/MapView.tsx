@@ -1,7 +1,9 @@
 import { useEffect } from 'react'
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMapEvents, useMap } from 'react-leaflet'
+import { useRef } from 'react'
 import L from 'leaflet'
 import { useRouteStore, colorParaIndice } from '../store/routeStore'
+import { geocodificarInverso } from '../services/api'
 import { useUIStore } from '../store/UiStore'
 import type { Stop } from '../types/routeTypes'
 import { CloudOutlined, ThunderboltOutlined, WarningOutlined } from '@ant-design/icons'
@@ -18,15 +20,8 @@ function makeNumberedIcon(numero: number, bg: string) {
   return L.divIcon({
     className: 'numbered-marker',
     html: `
-      <div style="
-        width: 30px; height: 30px; background: ${bg};
-        border: 3px solid #fff; border-radius: 50% 50% 50% 0;
-        transform: rotate(-45deg); box-shadow: 0 3px 8px rgba(0,0,0,0.35);
-        display: flex; align-items: center; justify-content: center;
-      ">
-        <span style="transform: rotate(45deg); color: #fff; font-weight: 800; font-size: 12px; font-family: Arial, sans-serif;">
-          ${numero}
-        </span>
+      <div style="width:30px;height:30px;background:${bg};border:3px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 3px 8px rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center;">
+        <span style="transform:rotate(45deg);color:#fff;font-weight:800;font-size:12px;font-family:Arial,sans-serif;">${numero}</span>
       </div>`,
     iconSize: [30, 30], iconAnchor: [15, 30], popupAnchor: [0, -28],
   })
@@ -42,39 +37,19 @@ const iconInicio = makeIcon('green')
 
 function ArrowDecorator({ segmentos }: { segmentos: { geometria: [number, number][]; color: string }[] }) {
   const map = useMap()
-
   useEffect(() => {
     const layers: L.Layer[] = []
-
     segmentos.forEach(seg => {
       if (seg.geometria.length < 2) return
       const polyline = L.polyline(seg.geometria)
       const decorator = (L as any).polylineDecorator(polyline, {
-        patterns: [
-          {
-            offset: '15%',
-            repeat: '30%',
-            symbol: (L as any).Symbol.arrowHead({
-              pixelSize: 10,
-              polygon: false,
-              pathOptions: {
-                color: seg.color,
-                weight: 2.5,
-                opacity: 0.9,
-              },
-            }),
-          },
-        ],
+        patterns: [{ offset: '15%', repeat: '30%', symbol: (L as any).Symbol.arrowHead({ pixelSize: 10, polygon: false, pathOptions: { color: seg.color, weight: 2.5, opacity: 0.9 } }) }],
       })
       decorator.addTo(map)
       layers.push(decorator)
     })
-
-    return () => {
-      layers.forEach(l => map.removeLayer(l))
-    }
+    return () => { layers.forEach(l => map.removeLayer(l)) }
   }, [segmentos, map])
-
   return null
 }
 
@@ -91,8 +66,16 @@ function MapClickHandler() {
   const { addParada, paradas, limpiarResultado } = useRouteStore()
   useMapEvents({
     click(e) {
-      addParada({ etiqueta: `Parada ${paradas.length + 1}`, calle: `${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}`, latitud: e.latlng.lat, longitud: e.latlng.lng } as Stop)
-      limpiarResultado()
+      const { lat, lng } = e.latlng
+      geocodificarInverso(lat, lng).then(etiqueta => {
+        addParada({
+          etiqueta,
+          calle: etiqueta,
+          latitud: lat,
+          longitud: lng,
+        } as Stop)
+        limpiarResultado()
+      })
     },
   })
   return null
@@ -105,9 +88,23 @@ function PanelAutoClose() {
 }
 
 export default function MapView() {
-  const { puntoInicio, paradas, resultado, segmentosVisuales, clima, loadClima, backendOk } = useRouteStore()
-  const { panelOpen, togglePanel } = useUIStore()
+  const { puntoInicio, paradas, resultado, segmentosVisuales, clima, loadClima, backendOk, setPuntoInicio, limpiarResultado } = useRouteStore()
+  const { panelOpen, togglePanel, setOrigenPendiente, setOrigenAnterior } = useUIStore()
   useEffect(() => { loadClima() }, [])
+
+  const markerInicioRef = useRef<L.Marker | null>(null)
+
+  const handlers = {
+    dragstart() {
+      setOrigenAnterior({ lat: puntoInicio.latitud, lng: puntoInicio.longitud })
+    },
+    async dragend(e: any) {
+      const { lat, lng } = e.target.getLatLng()
+      const etiqueta = await geocodificarInverso(lat, lng)
+      setPuntoInicio({ etiqueta, calle: etiqueta, latitud: lat, longitud: lng })
+      setOrigenPendiente({ lat, lng })
+    },
+  }
 
   return (
     <div style={{ position: 'absolute', inset: 0 }}>
@@ -117,24 +114,18 @@ export default function MapView() {
           url="https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png"
           maxZoom={20}
         />
-
-          <TileLayer
+        <TileLayer
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          opacity={.5}
-          minZoom={14}
-          maxZoom={20}
+          opacity={0.5} minZoom={14} maxZoom={20}
         />
-
         <FlyToController />
         <MapClickHandler />
         <PanelAutoClose />
 
-        {resultado && segmentosVisuales.length > 0 && (
-          <ArrowDecorator segmentos={segmentosVisuales} />
-        )}
+        {resultado && segmentosVisuales.length > 0 && <ArrowDecorator segmentos={segmentosVisuales} />}
 
-        <Marker position={[puntoInicio.latitud, puntoInicio.longitud]} icon={iconInicio}>
-          <Popup><b style={{ color: '#003F7F' }}>Inicio</b><br /><span style={{ fontSize: 12 }}>{puntoInicio.etiqueta}</span></Popup>
+        <Marker position={[puntoInicio.latitud, puntoInicio.longitud]} icon={iconInicio} draggable={true} eventHandlers={handlers}>
+          <Popup><b style={{ color: '#003F7F' }}>Inicio — arrastra para mover</b><br /><span style={{ fontSize: 12 }}>{puntoInicio.etiqueta}</span></Popup>
         </Marker>
 
         {!resultado && paradas.map((p, i) => (
@@ -145,33 +136,22 @@ export default function MapView() {
 
         {resultado && (
           <>
-            {segmentosVisuales.length > 0 ? (
-              segmentosVisuales.map((seg, i) => (
-                <Polyline key={i} positions={seg.geometria}
-                  pathOptions={{ color: seg.color, weight: 6, opacity: 0.9, lineCap: 'round', lineJoin: 'round' }} />
-              ))
-            ) : (
-              resultado.segmentos.map((s, i) => (
-                <Polyline key={i}
-                  positions={[[s.origen.latitud, s.origen.longitud], [s.destino.latitud, s.destino.longitud]]}
-                  pathOptions={{ color: i === 0 ? '#22c55e' : colorParaIndice(i), weight: 5, opacity: 0.7, dashArray: '8 6' }} />
-              ))
-            )}
-
-            <Marker position={[puntoInicio.latitud, puntoInicio.longitud]} icon={iconInicio}>
-              <Popup><b style={{ color: '#003F7F' }}>Inicio</b><br />{puntoInicio.etiqueta}</Popup>
-            </Marker>
-
+            {segmentosVisuales.length > 0
+              ? segmentosVisuales.map((seg, i) => (
+                  <Polyline key={i} positions={seg.geometria} pathOptions={{ color: seg.color, weight: 6, opacity: 0.9, lineCap: 'round', lineJoin: 'round' }} />
+                ))
+              : resultado.segmentos.map((s, i) => (
+                  <Polyline key={i} positions={[[s.origen.latitud, s.origen.longitud], [s.destino.latitud, s.destino.longitud]]}
+                    pathOptions={{ color: i === 0 ? '#22c55e' : colorParaIndice(i), weight: 5, opacity: 0.7, dashArray: '8 6' }} />
+                ))
+            }
             {resultado.segmentos.map((seg, i) => {
               const color = colorParaIndice(i + 1)
               return (
                 <Marker key={i} position={[seg.destino.latitud, seg.destino.longitud]} icon={makeNumberedIcon(i + 1, color)}>
                   <Popup>
                     <b style={{ color }}>#{i + 1} {seg.destino.etiqueta}</b><br />
-                    <span style={{ fontSize: 12 }}>
-                      {seg.distanciaKm.toFixed(2)} km — {seg.tiempoEstimadoMin} min
-                      {seg.horaLlegadaEstimada && <><br />Llegada: {seg.horaLlegadaEstimada}</>}
-                    </span>
+                    <span style={{ fontSize: 12 }}>{seg.distanciaKm.toFixed(2)} km — {seg.tiempoEstimadoMin} min{seg.horaLlegadaEstimada && <><br />Llegada: {seg.horaLlegadaEstimada}</>}</span>
                   </Popup>
                 </Marker>
               )
@@ -181,54 +161,29 @@ export default function MapView() {
       </MapContainer>
 
       {clima && (
-        <div style={{
-          position: 'absolute', top: 16, right: 16, zIndex: 1000,
-          display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 16,
-          boxShadow: '0 4px 20px rgba(0,0,0,0.12)', backdropFilter: 'blur(16px)',
-          background: clima.factor >= 1.3 ? 'rgba(239,68,68,0.92)' : clima.factor >= 1.1 ? 'rgba(245,158,11,0.92)' : 'rgba(255,255,255,0.92)',
-          color: clima.factor >= 1.1 ? '#fff' : '#1a1a1a', border: '1px solid rgba(255,255,255,0.35)',
-        }}>
+        <div style={{ position: 'absolute', top: 16, right: 16, zIndex: 1000, display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 16, boxShadow: '0 4px 20px rgba(0,0,0,0.12)', backdropFilter: 'blur(16px)', background: clima.factor >= 1.3 ? 'rgba(239,68,68,0.92)' : clima.factor >= 1.1 ? 'rgba(245,158,11,0.92)' : 'rgba(255,255,255,0.92)', color: clima.factor >= 1.1 ? '#fff' : '#1a1a1a', border: '1px solid rgba(255,255,255,0.35)' }}>
           {clima.factor >= 1.3 ? <ThunderboltOutlined style={{ fontSize: 16 }} /> : <CloudOutlined style={{ fontSize: 16 }} />}
           <div>
             <div style={{ fontWeight: 700, fontSize: 13 }}>{clima.temperatura}°C — {clima.descripcion}</div>
-            <div style={{ fontSize: 11, opacity: 0.8 }}>
-              Viento {clima.viento} km/h
-              {clima.factor > 1.0 && <span style={{ fontWeight: 800 }}> · +{Math.round((clima.factor - 1) * 100)}% tiempo</span>}
-            </div>
+            <div style={{ fontSize: 11, opacity: 0.8 }}>Viento {clima.viento} km/h{clima.factor > 1.0 && <span style={{ fontWeight: 800 }}> · +{Math.round((clima.factor - 1) * 100)}% tiempo</span>}</div>
           </div>
           {clima.factor >= 1.3 && <WarningOutlined style={{ fontSize: 13, color: '#fde047' }} />}
         </div>
       )}
 
-      <div style={{
-        position: 'absolute', top: clima ? 80 : 16, right: 16, zIndex: 1000,
-        display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px', borderRadius: 99,
-        background: 'rgba(255,255,255,0.85)', backdropFilter: 'blur(10px)',
-        boxShadow: '0 2px 10px rgba(0,0,0,0.08)', fontSize: 10, fontWeight: 600,
-        color: backendOk ? '#16a34a' : '#dc2626', transition: 'top 0.2s ease',
-      }}>
+      <div style={{ position: 'absolute', top: clima ? 80 : 16, right: 16, zIndex: 1000, display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px', borderRadius: 99, background: 'rgba(255,255,255,0.85)', backdropFilter: 'blur(10px)', boxShadow: '0 2px 10px rgba(0,0,0,0.08)', fontSize: 10, fontWeight: 600, color: backendOk ? '#16a34a' : '#dc2626', transition: 'top 0.2s ease' }}>
         <span style={{ width: 6, height: 6, borderRadius: '50%', background: backendOk ? '#22c55e' : '#ef4444', boxShadow: backendOk ? '0 0 0 3px rgba(34,197,94,0.2)' : '0 0 0 3px rgba(239,68,68,0.2)' }} />
         {backendOk ? 'Conectado' : 'Sin conexion'}
       </div>
 
       {paradas.length === 0 && !resultado && (
-        <div style={{
-          position: 'absolute', bottom: 32, left: '50%', transform: 'translateX(-50%)',
-          zIndex: 1000, pointerEvents: 'none', background: 'rgba(0,63,127,0.88)',
-          backdropFilter: 'blur(8px)', color: '#fff', fontSize: 12, fontWeight: 600,
-          padding: '8px 20px', borderRadius: 99, boxShadow: '0 4px 16px rgba(0,0,0,0.2)', whiteSpace: 'nowrap',
-        }}>
+        <div style={{ position: 'absolute', bottom: 32, left: '50%', transform: 'translateX(-50%)', zIndex: 1000, pointerEvents: 'none', background: 'rgba(0,63,127,0.88)', backdropFilter: 'blur(8px)', color: '#fff', fontSize: 12, fontWeight: 600, padding: '8px 20px', borderRadius: 99, boxShadow: '0 4px 16px rgba(0,0,0,0.2)', whiteSpace: 'nowrap' }}>
           Haz clic en el mapa para agregar paradas
         </div>
       )}
 
       {!panelOpen && (
-        <button onClick={togglePanel} style={{
-          position: 'absolute', top: 16, left: 16, zIndex: 1000,
-          width: 48, height: 48, borderRadius: 14, background: '#003F7F',
-          border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center',
-          justifyContent: 'center', boxShadow: '0 4px 20px rgba(0,63,127,0.4)', color: '#fff', fontSize: 18,
-        }} aria-label="Abrir panel">☰</button>
+        <button onClick={togglePanel} style={{ position: 'absolute', top: 16, left: 16, zIndex: 1000, width: 48, height: 48, borderRadius: 14, background: '#003F7F', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 20px rgba(0,63,127,0.4)', color: '#fff', fontSize: 18 }} aria-label="Abrir panel">☰</button>
       )}
     </div>
   )
