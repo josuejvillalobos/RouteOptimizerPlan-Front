@@ -53,6 +53,18 @@ interface RouteStore {
   reset: () => void
 }
 
+function factorHoraPico(): number {
+  const hora = new Date().getHours()
+  if (hora >= 7  && hora < 9)  return 1.4
+  if (hora >= 13 && hora < 15) return 1.3
+  if (hora >= 18 && hora < 20) return 1.35
+  if (hora >= 6  && hora < 7)  return 1.1
+  if (hora >= 15 && hora < 18) return 1.1
+  if (hora >= 20 && hora < 22) return 1.1
+  if (hora >= 22 || hora < 6)  return 0.9
+  return 1.0
+}
+
 async function calcularSegmentosOSRM(
   allPoints: Stop[],
   osrmPort: number,
@@ -111,7 +123,8 @@ async function calcularSegmentosOSRM(
     const color = i === 0 ? '#22c55e' : colorParaIndice(i)
     segmentosVisuales.push({ geometria, color })
     distanciaTotal += route.distance / 1000
-    tiempoTotal += Math.round(route.duration / 60)
+    const pico = factorHoraPico()
+    tiempoTotal += Math.round((route.duration / 60) * pico)
 
     // Guardar alternativas del primer segmento con múltiples rutas
     if (alternativas.length === 0 && routes.length > 1) {
