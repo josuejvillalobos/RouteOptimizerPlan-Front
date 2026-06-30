@@ -124,7 +124,12 @@ async function calcularSegmentosOSRM(
     segmentosVisuales.push({ geometria, color })
     distanciaTotal += route.distance / 1000
     const pico = factorHoraPico()
-    tiempoTotal += Math.round((route.duration / 60) * pico)
+    if (perfil === 'foot') {
+      // Velocidad peatonal 5km/h = 12 min/km
+      tiempoTotal += Math.round((route.distsance / 1000) * 12 * pico)
+    } else {
+      tiempoTotal += Math.round((route.duration / 60) * pico)
+    }
 
     // Guardar alternativas del primer segmento con múltiples rutas
     if (alternativas.length === 0 && routes.length > 1) {
