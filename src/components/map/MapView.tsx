@@ -21,6 +21,7 @@ import ParadasSinOptimizar  from './layers/ParadasSinOptimizar'
 import WidgetClima          from './widgets/WidgetClima'
 import BadgeConexion        from './widgets/BadgeConexion'
 import HintAgregarParadas   from './widgets/HintAgregarParadas'
+import HintBusquedaFallida  from './widgets/HintBusquedaFallida'
 import BotonAlerta          from './widgets/BotonAlerta'
 import BotonAbrirPanel      from './widgets/BotonAbrirPanel'
 
@@ -93,6 +94,7 @@ export default function MapView() {
       <WidgetClima />
       <BadgeConexion />
       <HintAgregarParadas />
+      <HintBusquedaFallida/>
       <BotonAlerta />
       <BotonAbrirPanel />
     </div>

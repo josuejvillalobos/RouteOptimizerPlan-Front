@@ -131,7 +131,7 @@ export async function geocodificarInverso(lat: number, lon: number): Promise<str
     const nombre = d.road || d.pedestrian || d.path || d.neighbourhood || 'Ubicacion seleccionada'
     const colonia = d.suburb || d.neighbourhood || d.city_district || ''
     return colonia ? `${nombre}, ${colonia}` : nombre
-  } catch {
+    } catch {
     return `${lat.toFixed(5)}, ${lon.toFixed(5)}`
   }
 }
@@ -175,4 +175,19 @@ export async function resolverAlerta(id: string): Promise<void> {
   await axios.patch(`${BASE_URL}/alertas/${id}/resolver`, {}, {
     headers: { Authorization: `Bearer ${token}` },
   })
+}
+
+export async function registrarDomicilioAprendizaje(data: {
+  busqueda: string
+  latitud: number
+  longitud: number
+  etiqueta?: string
+  fuente: 'MAPA_CLICK' | 'GEOCODING_FALLBACK'
+}): Promise<void> {
+  try {
+    await getToken()
+    await axios.post(`${BASE_URL}/ml/domicilios`, data, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+  } catch { /* silencioso — no afecta flujo principal */ }
 }

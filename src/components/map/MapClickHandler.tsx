@@ -1,7 +1,7 @@
 import { useMapEvents } from 'react-leaflet'
 import { useRouteStore } from '../../store/routeStore'
+import { geocodificarInverso, registrarDomicilioAprendizaje } from '../../services/api'
 import { useUIStore } from '../../store/UiStore'
-import { geocodificarInverso } from '../../services/api'
 import type { Stop } from '../../types/routeTypes'
 
 // Flag global para bloquear clicks accidentales
@@ -13,21 +13,37 @@ export function bloquearClick(ms = 300) {
 
 export default function MapClickHandler() {
   const { addParada, limpiarResultado, resultado } = useRouteStore()
+  const { busquedaFallida, setBusquedaFallida } = useUIStore()
 
   useMapEvents({
     click(e) {
-      if (resultado) return
       if (clickBloqueado) return
       if ((window as any).__clickBloqueado) return
       if ((window as any).__modalAbierto) return
 
-      geocodificarInverso(e.latlng.lat, e.latlng.lng).then(etiqueta => {
-        addParada({
-          etiqueta,
-          calle:    etiqueta,
-          latitud:  e.latlng.lat,
-          longitud: e.latlng.lng,
-        } as Stop)
+      const { lat, lng } = e.latlng
+
+      // Modo captura de domicilio no encontrado
+      if (busquedaFallida) {
+        geocodificarInverso(lat, lng).then(etiqueta => {
+          registrarDomicilioAprendizaje({
+            busqueda: busquedaFallida,
+            latitud:  lat,
+            longitud: lng,
+            etiqueta,
+            fuente:   'MAPA_CLICK',
+          })
+          addParada({ etiqueta, calle: etiqueta, latitud: lat, longitud: lng } as Stop)
+          setBusquedaFallida(null)
+          limpiarResultado()
+        })
+        return
+      }
+
+      if (resultado) return
+
+      geocodificarInverso(lat, lng).then(etiqueta => {
+        addParada({ etiqueta, calle: etiqueta, latitud: lat, longitud: lng } as Stop)
         limpiarResultado()
       })
     },
