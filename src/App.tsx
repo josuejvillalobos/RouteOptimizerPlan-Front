@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
-import RoutePanel from './components/RoutePanel'
-import MapView from './components/MapView'
+import RoutePanel from './components/panel/RoutePanel'
+import MapView from './components/map/MapView'
 import { useRouteStore } from './store/routeStore'
 import { pingBackend } from './services/api'
 

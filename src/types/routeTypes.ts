@@ -1,3 +1,24 @@
+export type AlgoritmoTipo = 'VECINO_MAS_CERCANO' | 'RECOCIDO_SIMULADO' | 'OR_TOOLS'
+export type TipoTransporte = 'AUTO' | 'A_PIE'
+export type ModoOrden = 'optimizado' | 'manual'
+
+// ─── Geo ──────────────────────────────────────────────────────────────────────
+
+export interface Posicion {
+  lat: number
+  lng: number
+}
+
+export interface AlertaZona {
+  latitud: number
+  longitud: number
+  tipo?: string
+}
+
+export type Geometria = [number, number][] // [lat, lon][]
+
+// ─── Parada / Stop ────────────────────────────────────────────────────────────
+
 export interface Stop {
   etiqueta: string
   calle: string
@@ -8,8 +29,7 @@ export interface Stop {
   tiempoServicioMin?: number
 }
 
-export type AlgoritmoTipo = 'VECINO_MAS_CERCANO' | 'RECOCIDO_SIMULADO' | 'OR_TOOLS'
-export type TipoTransporte = 'AUTO' | 'A_PIE'
+// ─── Ruta ─────────────────────────────────────────────────────────────────────
 
 export interface OptimizarRequest {
   nombreRuta: string
@@ -40,4 +60,24 @@ export interface RutaOptimizada {
   segmentos: SegmentoRuta[]
   factorClimatico?: number
   condicionClimatica?: string
+}
+
+// ─── Visualización ────────────────────────────────────────────────────────────
+
+export interface SegmentoVisual {
+  geometria: Geometria
+  color: string
+}
+
+export interface Alternativa {
+  geometria: Geometria
+  distanciaKm: number
+  tiempoMin: number
+}
+
+// ─── OSRM ─────────────────────────────────────────────────────────────────────
+
+export interface OsrmPerfil {
+  port: number
+  perfil: string
 }

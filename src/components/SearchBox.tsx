@@ -19,6 +19,32 @@ function getIcon(r: NominatimResult) {
   return <EnvironmentOutlined style={{ fontSize: 11 }} />
 }
 
+function buildEtiqueta(r: NominatimResult): string {
+  const a = r.address ?? {}
+  const nombre = r.namedetails?.name || a.shop || a.amenity || a.office || a.building
+  const calle = a.road || a.pedestrian || ''
+  const numero = a.house_number ? ` ${a.house_number}` : ''
+  const colonia = a.suburb || a.neighbourhood || a.city_district || ''
+  const cp = a.postcode || ''
+
+  if (nombre) return `${nombre}${calle ? ` — ${calle}${numero}` : ''}${colonia ? `, ${colonia}` : ''}`
+  if (calle) return `${calle}${numero}${colonia ? `, ${colonia}` : ''}${cp ? ` CP ${cp}` : ''}`
+  return r.display_name.split(',').slice(0, 3).join(',').trim()
+}
+
+function buildSecundario(r: NominatimResult): string {
+  const a = r.address ?? {}
+  const partes: string[] = []
+  if (a.road || a.pedestrian) {
+    const calle = a.road || a.pedestrian || ''
+    const numero = a.house_number ? ` ${a.house_number}` : ''
+    partes.push(`${calle}${numero}`)
+  }
+  if (a.suburb || a.neighbourhood) partes.push(a.suburb || a.neighbourhood || '')
+  if (a.postcode) partes.push(`CP ${a.postcode}`)
+  return partes.join(', ') || 'Aguascalientes, México'
+}
+
 export default function SearchBox({ placeholder, onSelect }: Props) {
   const [query, setQuery] = useState('')
   const [debouncedQuery] = useDebounce(query, 380)
@@ -29,7 +55,6 @@ export default function SearchBox({ placeholder, onSelect }: Props) {
   const wrapperRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  // Calcular posicion del dropdown en coordenadas de viewport (fixed)
   function updatePos() {
     if (wrapperRef.current) {
       const rect = wrapperRef.current.getBoundingClientRect()
@@ -46,7 +71,6 @@ export default function SearchBox({ placeholder, onSelect }: Props) {
       .finally(() => setLoading(false))
   }, [debouncedQuery])
 
-  // Cerrar al hacer clic fuera
   useEffect(() => {
     const h = (e: MouseEvent) => {
       const target = e.target as Node
@@ -60,7 +84,6 @@ export default function SearchBox({ placeholder, onSelect }: Props) {
     return () => document.removeEventListener('mousedown', h)
   }, [])
 
-  // Actualizar posicion al hacer scroll del panel
   useEffect(() => {
     if (!open) return
     const panel = document.getElementById('route-panel-scroll')
@@ -73,9 +96,9 @@ export default function SearchBox({ placeholder, onSelect }: Props) {
   }, [open])
 
   function handleSelect(r: NominatimResult) {
-    const primary = r.display_name.split(',')[0].trim()
+    const etiqueta = buildEtiqueta(r)
     onSelect({
-      etiqueta: primary,
+      etiqueta,
       calle: r.display_name,
       latitud: parseFloat(r.lat),
       longitud: parseFloat(r.lon),
@@ -109,7 +132,6 @@ export default function SearchBox({ placeholder, onSelect }: Props) {
           }}>
             {results.length} resultado{results.length !== 1 ? 's' : ''}
           </div>
-          {/* 3.5 items visibles = ~196px, luego scrollbar */}
           <div style={{
             maxHeight: 196,
             overflowY: 'auto',
@@ -117,8 +139,8 @@ export default function SearchBox({ placeholder, onSelect }: Props) {
             scrollbarColor: '#d1d5db transparent',
           }}>
             {results.map((r, idx) => {
-              const primary = r.display_name.split(',')[0].trim()
-              const secondary = r.display_name.split(',').slice(1, 3).join(',').trim()
+              const primary = buildEtiqueta(r)
+              const secondary = buildSecundario(r)
               return (
                 <button
                   key={r.place_id}
@@ -144,7 +166,7 @@ export default function SearchBox({ placeholder, onSelect }: Props) {
                       {primary}
                     </div>
                     <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {secondary || 'Aguascalientes, Mexico'}
+                      {secondary}
                     </div>
                   </div>
                 </button>

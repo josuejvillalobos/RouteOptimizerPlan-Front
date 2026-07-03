@@ -2,7 +2,7 @@ import axios from 'axios'
 import type { OptimizarRequest, RutaOptimizada } from '../types/routeTypes'
 
 const BASE_URL = 'http://localhost:8080/api/v1'
-let token: string | null = null
+  let token: string | null = null
 
 async function getToken(): Promise<string> {
   if (token) return token
@@ -31,6 +31,23 @@ export interface NominatimResult {
   lon: string
   type: string
   category: string
+  address?: {
+    house_number?: string
+    road?: string
+    pedestrian?: string
+    neighbourhood?: string
+    suburb?: string
+    city_district?: string
+    postcode?: string
+    shop?: string
+    amenity?: string
+    building?: string
+    office?: string
+  }
+  namedetails?: {
+    name?: string
+    'name:es'?: string
+  }
 }
 
 export async function buscarDirecciones(query: string): Promise<NominatimResult[]> {
@@ -45,7 +62,7 @@ export async function buscarDirecciones(query: string): Promise<NominatimResult[
       namedetails: 1,
       countrycodes: 'mx',
       viewbox: '-102.50,22.20,-101.90,21.60',
-      bounded: 0,
+      bounded: 1,
       'accept-language': 'es',
     },
     headers: {},
@@ -70,29 +87,37 @@ export interface ClimateInfo {
 export async function getClima(): Promise<ClimateInfo> {
   const res = await axios.get('https://api.open-meteo.com/v1/forecast', {
     params: {
-      latitude: 21.8818,
-      longitude: -102.2916,
-      current: 'temperature_2m,precipitation,windspeed_10m,weathercode',
-      timezone: 'America/Mexico_City',
+      latitude:   21.8818,
+      longitude:  -102.2916,
+      current:    'temperature_2m,apparent_temperature,precipitation,windspeed_10m,weathercode,relativehumidity_2m',
+      timezone:   'America/Mexico_City',
       forecast_days: 1,
     },
   })
-  const c = res.data.current
-  const code: number = c.weathercode
+
+  const c    = res.data.current
+  const code = c.weathercode as number
+
+  // Descripción más precisa por weathercode
   let descripcion = 'Despejado'
-  let factor = 1.0
-  if (code >= 95) { descripcion = 'Tormenta'; factor = 1.4 }
-  else if (code >= 80) { descripcion = 'Chubascos'; factor = 1.25 }
-  else if (code >= 71) { descripcion = 'Nevada'; factor = 1.5 }
-  else if (code >= 51) { descripcion = 'Lluvia'; factor = 1.3 }
-  else if (code >= 45) { descripcion = 'Neblina'; factor = 1.1 }
-  else if (code >= 2) { descripcion = 'Nublado'; factor = 1.0 }
+  let factor      = 1.0
+
+  if      (code === 0)                    { descripcion = 'Despejado';    factor = 1.0  }
+  else if (code <= 2)                     { descripcion = 'Poco nublado'; factor = 1.0  }
+  else if (code === 3)                    { descripcion = 'Nublado';      factor = 1.0  }
+  else if (code >= 45 && code <= 48)      { descripcion = 'Neblina';      factor = 1.1  }
+  else if (code >= 51 && code <= 55)      { descripcion = 'Llovizna';     factor = 1.15 }
+  else if (code >= 61 && code <= 65)      { descripcion = 'Lluvia';       factor = 1.3  }
+  else if (code >= 71 && code <= 77)      { descripcion = 'Nevada';       factor = 1.5  }
+  else if (code >= 80 && code <= 82)      { descripcion = 'Chubascos';    factor = 1.25 }
+  else if (code >= 95 && code <= 99)      { descripcion = 'Tormenta';     factor = 1.4  }
+
   return {
     temperatura: Math.round(c.temperature_2m),
     descripcion,
     factor,
-    lluvia: c.precipitation,
-    viento: Math.round(c.windspeed_10m),
+    lluvia:  c.precipitation,
+    viento:  Math.round(c.windspeed_10m),
   }
 }
 
