@@ -2,7 +2,7 @@ import axios from 'axios'
 import type { OptimizarRequest, RutaOptimizada } from '../types/routeTypes'
 
 const BASE_URL = 'http://localhost:8080/api/v1'
-  let token: string | null = null
+let token: string | null = null
 
 async function getToken(): Promise<string> {
   if (token) return token
@@ -10,6 +10,8 @@ async function getToken(): Promise<string> {
   token = res.data.token
   return token!
 }
+
+// ─── Ruta ─────────────────────────────────────────────────────────────────────
 
 export async function optimizarRuta(req: OptimizarRequest): Promise<RutaOptimizada> {
   await getToken()
@@ -24,28 +26,30 @@ export async function pingBackend(): Promise<boolean> {
   catch { return false }
 }
 
+// ─── Nominatim ────────────────────────────────────────────────────────────────
+
 export interface NominatimResult {
-  place_id: number
+  place_id:    number
   display_name: string
-  lat: string
-  lon: string
-  type: string
-  category: string
+  lat:         string
+  lon:         string
+  type:        string
+  category:    string
   address?: {
-    house_number?: string
-    road?: string
-    pedestrian?: string
+    house_number?:  string
+    road?:          string
+    pedestrian?:    string
     neighbourhood?: string
-    suburb?: string
+    suburb?:        string
     city_district?: string
-    postcode?: string
-    shop?: string
-    amenity?: string
-    building?: string
-    office?: string
+    postcode?:      string
+    shop?:          string
+    amenity?:       string
+    building?:      string
+    office?:        string
   }
   namedetails?: {
-    name?: string
+    name?:    string
     'name:es'?: string
   }
 }
@@ -54,15 +58,15 @@ export async function buscarDirecciones(query: string): Promise<NominatimResult[
   if (query.length < 2) return []
   const res = await axios.get('https://nominatim.openstreetmap.org/search', {
     params: {
-      q: query,
-      format: 'json',
-      limit: 10,
-      addressdetails: 1,
-      extratags: 1,
-      namedetails: 1,
-      countrycodes: 'mx',
-      viewbox: '-102.50,22.20,-101.90,21.60',
-      bounded: 1,
+      q:                query,
+      format:           'json',
+      limit:            10,
+      addressdetails:   1,
+      extratags:        1,
+      namedetails:      1,
+      countrycodes:     'mx',
+      viewbox:          '-102.50,22.20,-101.90,21.60',
+      bounded:          1,
       'accept-language': 'es',
     },
     headers: {},
@@ -76,21 +80,23 @@ function inAgs(r: NominatimResult) {
   return lat >= 21.60 && lat <= 22.20 && lon >= -102.50 && lon <= -101.90
 }
 
+// ─── Clima ────────────────────────────────────────────────────────────────────
+
 export interface ClimateInfo {
   temperatura: number
   descripcion: string
-  factor: number
-  lluvia: number
-  viento: number
+  factor:      number
+  lluvia:      number
+  viento:      number
 }
 
 export async function getClima(): Promise<ClimateInfo> {
   const res = await axios.get('https://api.open-meteo.com/v1/forecast', {
     params: {
-      latitude:   21.8818,
-      longitude:  -102.2916,
-      current:    'temperature_2m,apparent_temperature,precipitation,windspeed_10m,weathercode,relativehumidity_2m',
-      timezone:   'America/Mexico_City',
+      latitude:     21.8818,
+      longitude:    -102.2916,
+      current:      'temperature_2m,apparent_temperature,precipitation,windspeed_10m,weathercode,relativehumidity_2m',
+      timezone:     'America/Mexico_City',
       forecast_days: 1,
     },
   })
@@ -98,19 +104,18 @@ export async function getClima(): Promise<ClimateInfo> {
   const c    = res.data.current
   const code = c.weathercode as number
 
-  // Descripción más precisa por weathercode
   let descripcion = 'Despejado'
   let factor      = 1.0
 
-  if      (code === 0)                    { descripcion = 'Despejado';    factor = 1.0  }
-  else if (code <= 2)                     { descripcion = 'Poco nublado'; factor = 1.0  }
-  else if (code === 3)                    { descripcion = 'Nublado';      factor = 1.0  }
-  else if (code >= 45 && code <= 48)      { descripcion = 'Neblina';      factor = 1.1  }
-  else if (code >= 51 && code <= 55)      { descripcion = 'Llovizna';     factor = 1.15 }
-  else if (code >= 61 && code <= 65)      { descripcion = 'Lluvia';       factor = 1.3  }
-  else if (code >= 71 && code <= 77)      { descripcion = 'Nevada';       factor = 1.5  }
-  else if (code >= 80 && code <= 82)      { descripcion = 'Chubascos';    factor = 1.25 }
-  else if (code >= 95 && code <= 99)      { descripcion = 'Tormenta';     factor = 1.4  }
+  if      (code === 0)               { descripcion = 'Despejado';    factor = 1.0  }
+  else if (code <= 2)                { descripcion = 'Poco nublado'; factor = 1.0  }
+  else if (code === 3)               { descripcion = 'Nublado';      factor = 1.0  }
+  else if (code >= 45 && code <= 48) { descripcion = 'Neblina';      factor = 1.1  }
+  else if (code >= 51 && code <= 55) { descripcion = 'Llovizna';     factor = 1.15 }
+  else if (code >= 61 && code <= 65) { descripcion = 'Lluvia';       factor = 1.3  }
+  else if (code >= 71 && code <= 77) { descripcion = 'Nevada';       factor = 1.5  }
+  else if (code >= 80 && code <= 82) { descripcion = 'Chubascos';    factor = 1.25 }
+  else if (code >= 95 && code <= 99) { descripcion = 'Tormenta';     factor = 1.4  }
 
   return {
     temperatura: Math.round(c.temperature_2m),
@@ -121,31 +126,35 @@ export async function getClima(): Promise<ClimateInfo> {
   }
 }
 
+// ─── Geocodificación inversa ──────────────────────────────────────────────────
+
 export async function geocodificarInverso(lat: number, lon: number): Promise<string> {
   try {
     const res = await axios.get('https://nominatim.openstreetmap.org/reverse', {
       params: { lat, lon, format: 'json', 'accept-language': 'es' },
       headers: {},
     })
-    const d = res.data.address
-    const nombre = d.road || d.pedestrian || d.path || d.neighbourhood || 'Ubicacion seleccionada'
+    const d       = res.data.address
+    const nombre  = d.road || d.pedestrian || d.path || d.neighbourhood || 'Ubicacion seleccionada'
     const colonia = d.suburb || d.neighbourhood || d.city_district || ''
     return colonia ? `${nombre}, ${colonia}` : nombre
-    } catch {
+  } catch {
     return `${lat.toFixed(5)}, ${lon.toFixed(5)}`
   }
 }
 
+// ─── Alertas ──────────────────────────────────────────────────────────────────
+
 export interface Alert {
-  id: string
-  tipo: string
-  descripcion?: string
-  latitud: number
-  longitud: number
-  usuarioId: string
-  creadoEn: string
-  expiraEn: string
-  activa: boolean
+  id:            string
+  tipo:          string
+  descripcion?:  string
+  latitud:       number
+  longitud:      number
+  usuarioId:     string
+  creadoEn:      string
+  expiraEn:      string
+  activa:        boolean
   vecesReportada: number
 }
 
@@ -158,10 +167,10 @@ export async function getAlertasActivas(): Promise<Alert[]> {
 }
 
 export async function crearAlerta(data: {
-  tipo: string
+  tipo:         string
   descripcion?: string
-  latitud: number
-  longitud: number
+  latitud:      number
+  longitud:     number
 }): Promise<Alert> {
   await getToken()
   const res = await axios.post(`${BASE_URL}/alertas`, data, {
@@ -177,17 +186,55 @@ export async function resolverAlerta(id: string): Promise<void> {
   })
 }
 
+// ─── ML — Domicilios aprendizaje ──────────────────────────────────────────────
+
 export async function registrarDomicilioAprendizaje(data: {
-  busqueda: string
-  latitud: number
-  longitud: number
+  busqueda:  string
+  latitud:   number
+  longitud:  number
   etiqueta?: string
-  fuente: 'MAPA_CLICK' | 'GEOCODING_FALLBACK'
+  fuente:    'MAPA_CLICK' | 'GEOCODING_FALLBACK'
 }): Promise<void> {
   try {
     await getToken()
     await axios.post(`${BASE_URL}/ml/domicilios`, data, {
       headers: { Authorization: `Bearer ${token}` },
     })
-  } catch { /* silencioso — no afecta flujo principal */ }
+  } catch { /* silencioso */ }
+}
+
+// ─── ML — Historial de rutas ──────────────────────────────────────────────────
+
+export async function iniciarRutaML(data: {
+  algoritmoUsado:         string
+  tipoTransporte:         string
+  numParadas:             number
+  distanciaPlanificadaKm: number
+  tiempoPlanificadoMin:   number
+  factorClimatico?:       number
+  condicionClimatica?:    string
+  temperatura?:           number
+  factorHoraPico?:        number
+  alertasActivas?:        number
+}): Promise<{ id: string }> {
+  try {
+    await getToken()
+    const res = await axios.post(`${BASE_URL}/ml/rutas/iniciar`, data, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    return res.data
+  } catch { return { id: '' } }
+}
+
+export async function completarRutaML(id: string, data: {
+  tiempoRealMin: number
+  recalculos:    number
+}): Promise<void> {
+  try {
+    if (!id) return
+    await getToken()
+    await axios.patch(`${BASE_URL}/ml/rutas/${id}/completar`, data, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+  } catch { /* silencioso */ }
 }

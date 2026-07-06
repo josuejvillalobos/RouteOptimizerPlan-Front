@@ -1,13 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouteStore } from '../../store/routeStore'
+import { completarRutaML } from '../../services/api'
 import { distanciaAPuntoRuta } from '../../utils/geo'
 import { OSRM_CONFIG } from '../../constants/route'
 
 export default function SeguimientoGPS() {
   const {
     resultado, segmentosVisuales, seguimientoActivo,
-    setPosicionActual, recalcularDesde,
+    setPosicionActual, recalcularDesde, rutaMLId,
   } = useRouteStore()
+
+  const recalculosRef = useRef<number>(0)
 
   const [recalculando, setRecalculando] = useState(false)
   const watchIdRef       = useRef<number | null>(null)
@@ -18,6 +21,16 @@ export default function SeguimientoGPS() {
       if (watchIdRef.current !== null) {
         navigator.geolocation.clearWatch(watchIdRef.current)
         watchIdRef.current = null
+
+        if (rutaMLId) {
+          const horaInicio = ultimoRecalculo.current || Date.now()
+          const tiempoRealMin = Math.round((Date.now() - horaInicio) / 60000)
+          completarRutaML(rutaMLId, {
+            tiempoRealMin,
+            recalculos: recalculosRef.current,
+          })
+          recalculosRef.current = 0
+        }
       }
       setPosicionActual(null)
       return
@@ -41,6 +54,7 @@ export default function SeguimientoGPS() {
         if (desvio && cooldownOk) {
           ultimoRecalculo.current = ahora
           setRecalculando(true)
+          recalculosRef.current += 1
           recalcularDesde(lat, lng).finally(() => setRecalculando(false))
         }
       },

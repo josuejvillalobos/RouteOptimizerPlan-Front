@@ -1,7 +1,8 @@
 import type { StoreApi } from 'zustand'
 import type { RouteStore } from '../routeStore'
 import type { RutaOptimizada, AlgoritmoTipo } from '../../types/routeTypes'
-import { optimizarRuta } from '../../services/api'
+import { optimizarRuta, iniciarRutaML } from '../../services/api'
+import { factorHoraPico } from '../../utils/geo'
 import { calcularSegmentosOSRM } from '../../utils/osrm'
 import { osrmConfig, seleccionarAlgoritmo, filtrarPuntoInicio, nombreRutaConTimestamp } from '../../utils/routing'
 
@@ -45,6 +46,18 @@ export async function optimizar(set: Set, get: Get): Promise<void> {
         alternativaActiva: 0,
         loading: false,
       })
+        iniciarRutaML({
+          algoritmoUsado:         result.algoritmoUsado,
+          tipoTransporte:         transporte,
+          numParadas:             paradas.length,
+          distanciaPlanificadaKm: distanciaTotal,
+          tiempoPlanificadoMin:   result.tiempoEstimadoMin,
+          factorClimatico:        result.factorClimatico,
+          condicionClimatica:     result.condicionClimatica,
+          temperatura:            get().clima?.temperatura,
+          factorHoraPico:         factorHoraPico(),
+          alertasActivas:         get().alertasActivas.length,
+        }).then(({ id }) => get().setRutaMLId(id))
     } catch {
       set({ resultado: result, loading: false })
     }
@@ -55,6 +68,8 @@ export async function optimizar(set: Set, get: Get): Promise<void> {
     })
   }
 }
+
+
 
 // ─── Optimizar en orden manual ────────────────────────────────────────────────
 

@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import type { Stop, TipoTransporte, RutaOptimizada, ModoOrden, SegmentoVisual, Alternativa, Posicion, AlertaZona } from '../types/routeTypes'
 import type { ClimateInfo } from '../services/api'
 import { getClima } from '../services/api'
-import { INICIO_DEFAULT, MAPA_DEFAULT } from '../constants/route'
+import { INICIO_DEFAULT, MAPA_DEFAULT, ROUTE_COLORS } from '../constants/route'
 import { optimizar, optimizarManual } from './actions/optimizarActions'
 import { recalcularDesde } from './actions/gpsActions'
 
@@ -30,12 +30,15 @@ export interface RouteStore {
   flyTo:     { lat: number; lon: number; zoom?: number } | null
 
   // Externos
-  clima:         ClimateInfo | null
+  clima:          ClimateInfo | null
   alertasActivas: AlertaZona[]
 
   // GPS
   seguimientoActivo: boolean
   posicionActual:    Posicion | null
+
+  // ML
+  rutaMLId: string | null
 
   // Setters simples
   setPuntoInicio:       (stop: Stop) => void
@@ -50,6 +53,7 @@ export interface RouteStore {
   setAlertasActivas:    (alertas: AlertaZona[]) => void
   setSeguimientoActivo: (v: boolean) => void
   setPosicionActual:    (pos: Posicion | null) => void
+  setRutaMLId:          (id: string | null) => void
   clearFlyTo:           () => void
   limpiarResultado:     () => void
   reset:                () => void
@@ -81,16 +85,16 @@ const ESTADO_INICIAL = {
   alertasActivas:    [] as AlertaZona[],
   seguimientoActivo: false,
   posicionActual:    null as Posicion | null,
+  rutaMLId:          null as string | null,
   flyTo:             null as { lat: number; lon: number; zoom?: number } | null,
 }
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
 
-import { ROUTE_COLORS } from '../constants/route'
-
 export function colorParaIndice(i: number): string {
   return ROUTE_COLORS[i % ROUTE_COLORS.length]
 }
+
 // ─── Store ────────────────────────────────────────────────────────────────────
 
 export const useRouteStore = create<RouteStore>((set, get) => ({
@@ -119,6 +123,7 @@ export const useRouteStore = create<RouteStore>((set, get) => ({
   setAlertasActivas:    (alertasActivas)    => set({ alertasActivas }),
   setSeguimientoActivo: (seguimientoActivo) => set({ seguimientoActivo }),
   setPosicionActual:    (posicionActual)    => set({ posicionActual }),
+  setRutaMLId:          (rutaMLId)          => set({ rutaMLId }),
   clearFlyTo:           ()                  => set({ flyTo: null }),
   limpiarResultado: () => set({
     resultado:         null,
@@ -126,6 +131,7 @@ export const useRouteStore = create<RouteStore>((set, get) => ({
     segmentosVisuales: [],
     alternativas:      [],
     alternativaActiva: 0,
+    rutaMLId:          null,
   }),
   reset: () => set({
     ...ESTADO_INICIAL,
