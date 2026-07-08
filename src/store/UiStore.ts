@@ -1,3 +1,4 @@
+
 import { create } from 'zustand'
 
 interface OrigenPos { lat: number; lng: number }
@@ -12,6 +13,8 @@ interface UIStore {
   cancelarOrigen: () => void
   modoAlerta: boolean
   setModoAlerta: (v: boolean) => void
+  busquedaFallida: string | null
+  setBusquedaFallida: (q: string | null) => void
 }
 
 export const useUIStore = create<UIStore>((set) => ({
@@ -24,5 +27,7 @@ export const useUIStore = create<UIStore>((set) => ({
   setOrigenAnterior: (pos) => set({ origenAnterior: pos }),
   cancelarOrigen: () => set({ origenPendiente: null, origenAnterior: null }),
   modoAlerta: false,
-  setModoAlerta: (modoAlerta) => set({ modoAlerta })
+  setModoAlerta: (modoAlerta) => set({ modoAlerta }),
+  busquedaFallida: null,
+  setBusquedaFallida: (busquedaFallida) => set({ busquedaFallida }),
 }))
