@@ -2,11 +2,20 @@ import axios from 'axios'
 import type { OptimizarRequest, RutaOptimizada } from '../types/routeTypes'
 
 const BASE_URL = 'http://localhost:8080/api/v1'
+const API_KEY = 'miaa-secret-key-2026' // TEMPORAL — mover a variable de entorno del front (.env / VITE_API_KEY)
+
 let token: string | null = null
+
+// Instancia dedicada al backend propio, con X-API-Key siempre incluido.
+// Nominatim/Open-Meteo NO deben usar esta instancia (no la necesitan y no la esperan).
+const api = axios.create({
+  baseURL: BASE_URL,
+  headers: { 'X-API-Key': API_KEY },
+})
 
 async function getToken(): Promise<string> {
   if (token) return token
-  const res = await axios.get(`${BASE_URL}/dev-token`)
+  const res = await api.get('/dev-token')
   token = res.data.token
   return token!
 }
@@ -15,18 +24,20 @@ async function getToken(): Promise<string> {
 
 export async function optimizarRuta(req: OptimizarRequest): Promise<RutaOptimizada> {
   await getToken()
-  const res = await axios.post(`${BASE_URL}/rutas/optimizar`, req, {
+  const res = await api.post('/rutas/optimizar', req, {
     headers: { Authorization: `Bearer ${token}` },
   })
   return res.data
 }
 
 export async function pingBackend(): Promise<boolean> {
-  try { await axios.get(`${BASE_URL}/ping`); return true }
+  try { await api.get('/ping'); return true }
   catch { return false }
 }
 
 // ─── Nominatim ────────────────────────────────────────────────────────────────
+// Servicio externo (OpenStreetMap) — usa axios normal, NO la instancia `api`.
+// No debe llevar X-API-Key ni Authorization: son headers de nuestro backend, no de Nominatim.
 
 export interface NominatimResult {
   place_id:    number
@@ -81,6 +92,7 @@ function inAgs(r: NominatimResult) {
 }
 
 // ─── Clima ────────────────────────────────────────────────────────────────────
+// Servicio externo (Open-Meteo) — axios normal, mismo motivo que Nominatim.
 
 export interface ClimateInfo {
   temperatura: number
@@ -127,6 +139,7 @@ export async function getClima(): Promise<ClimateInfo> {
 }
 
 // ─── Geocodificación inversa ──────────────────────────────────────────────────
+// Servicio externo (Nominatim reverse) — axios normal, mismo motivo.
 
 export async function geocodificarInverso(lat: number, lon: number): Promise<string> {
   try {
@@ -160,7 +173,7 @@ export interface Alert {
 
 export async function getAlertasActivas(): Promise<Alert[]> {
   await getToken()
-  const res = await axios.get(`${BASE_URL}/alertas/activas`, {
+  const res = await api.get('/alertas/activas', {
     headers: { Authorization: `Bearer ${token}` },
   })
   return res.data
@@ -173,7 +186,7 @@ export async function crearAlerta(data: {
   longitud:     number
 }): Promise<Alert> {
   await getToken()
-  const res = await axios.post(`${BASE_URL}/alertas`, data, {
+  const res = await api.post('/alertas', data, {
     headers: { Authorization: `Bearer ${token}` },
   })
   return res.data
@@ -181,7 +194,7 @@ export async function crearAlerta(data: {
 
 export async function resolverAlerta(id: string): Promise<void> {
   await getToken()
-  await axios.patch(`${BASE_URL}/alertas/${id}/resolver`, {}, {
+  await api.patch(`/alertas/${id}/resolver`, {}, {
     headers: { Authorization: `Bearer ${token}` },
   })
 }
@@ -197,7 +210,7 @@ export async function registrarDomicilioAprendizaje(data: {
 }): Promise<void> {
   try {
     await getToken()
-    await axios.post(`${BASE_URL}/ml/domicilios`, data, {
+    await api.post('/ml/domicilios', data, {
       headers: { Authorization: `Bearer ${token}` },
     })
   } catch { /* silencioso */ }
@@ -219,7 +232,7 @@ export async function iniciarRutaML(data: {
 }): Promise<{ id: string }> {
   try {
     await getToken()
-    const res = await axios.post(`${BASE_URL}/ml/rutas/iniciar`, data, {
+    const res = await api.post('/ml/rutas/iniciar', data, {
       headers: { Authorization: `Bearer ${token}` },
     })
     return res.data
@@ -233,7 +246,7 @@ export async function completarRutaML(id: string, data: {
   try {
     if (!id) return
     await getToken()
-    await axios.patch(`${BASE_URL}/ml/rutas/${id}/completar`, data, {
+    await api.patch(`/ml/rutas/${id}/completar`, data, {
       headers: { Authorization: `Bearer ${token}` },
     })
   } catch { /* silencioso */ }
