@@ -1,13 +1,41 @@
 import type { StoreApi } from 'zustand'
 import type { RouteStore } from '../routeStore'
-import type { RutaOptimizada, AlgoritmoTipo } from '../../types/routeTypes'
+import type { AlgoritmoTipo } from '../../types/routeTypes'
 import { optimizarRuta, iniciarRutaML } from '../../services/api'
-import { factorHoraPico } from '../../utils/geo'
 import { calcularSegmentosOSRM } from '../../utils/osrm'
 import { osrmConfig, seleccionarAlgoritmo, filtrarPuntoInicio, nombreRutaConTimestamp } from '../../utils/routing'
+import { factorHoraPico } from '../../utils/geo'
 
 type Set = StoreApi<RouteStore>['setState']
 type Get = StoreApi<RouteStore>['getState']
+
+// ─── Helper para registrar ruta en ML ────────────────────────────────────────
+
+function registrarInicioML(
+  get: Get,
+  algoritmoUsado: string,
+  transporte: string,
+  numParadas: number,
+  distanciaKm: number,
+  tiempoMin: number,
+  factorClimatico?: number,
+  condicionClimatica?: string,
+) {
+  iniciarRutaML({
+    algoritmoUsado,
+    tipoTransporte:         transporte,
+    numParadas,
+    distanciaPlanificadaKm: distanciaKm,
+    tiempoPlanificadoMin:   tiempoMin,
+    factorClimatico,
+    condicionClimatica,
+    temperatura:            get().clima?.temperatura,
+    factorHoraPico:         factorHoraPico(),
+    alertasActivas:         get().alertasActivas.length,
+  }).then(({ id }) => {
+    if (id) get().setRutaMLId(id)
+  })
+}
 
 // ─── Optimizar con algoritmo TSP ─────────────────────────────────────────────
 
@@ -24,7 +52,8 @@ export async function optimizar(set: Set, get: Get): Promise<void> {
   try {
     const result = await optimizarRuta({
       nombreRuta:     nombreRutaConTimestamp('Ruta MIAA'),
-      algoritmo:      seleccionarAlgoritmo(paradas.length) as AlgoritmoTipo,      tipoTransporte: transporte,
+      algoritmo:      seleccionarAlgoritmo(paradas.length) as AlgoritmoTipo,
+      tipoTransporte: transporte,
       horaInicioRuta: '08:00',
       puntoInicio,
       paradas,
@@ -46,21 +75,35 @@ export async function optimizar(set: Set, get: Get): Promise<void> {
         alternativaActiva: 0,
         loading: false,
       })
-        iniciarRutaML({
-          algoritmoUsado:         result.algoritmoUsado,
-          tipoTransporte:         transporte,
-          numParadas:             paradas.length,
-          distanciaPlanificadaKm: distanciaTotal,
-          tiempoPlanificadoMin:   result.tiempoEstimadoMin,
-          factorClimatico:        result.factorClimatico,
-          condicionClimatica:     result.condicionClimatica,
-          temperatura:            get().clima?.temperatura,
-          factorHoraPico:         factorHoraPico(),
-          alertasActivas:         get().alertasActivas.length,
-        }).then(({ id }) => get().setRutaMLId(id))
+
+      // Registrar con distancia real de OSRM
+      registrarInicioML(
+        get,
+        result.algoritmoUsado,
+        transporte,
+        paradas.length,
+        distanciaTotal,
+        result.tiempoEstimadoMin,
+        result.factorClimatico,
+        result.condicionClimatica,
+      )
+
     } catch {
       set({ resultado: result, loading: false })
+
+      // Registrar con datos del backend aunque OSRM falle
+      registrarInicioML(
+        get,
+        result.algoritmoUsado,
+        transporte,
+        paradas.length,
+        result.distanciaTotalKm,
+        result.tiempoEstimadoMin,
+        result.factorClimatico,
+        result.condicionClimatica,
+      )
     }
+
   } catch (e: any) {
     set({
       error: e?.response?.data?.mensaje ?? 'Error al conectar con el backend',
@@ -68,8 +111,6 @@ export async function optimizar(set: Set, get: Get): Promise<void> {
     })
   }
 }
-
-
 
 // ─── Optimizar en orden manual ────────────────────────────────────────────────
 
@@ -91,7 +132,7 @@ export async function optimizarManual(set: Set, get: Get): Promise<void> {
     const { segmentosVisuales, distanciaTotal, tiempoTotal } =
       await calcularSegmentosOSRM(allPoints, port, perfil, get().alertasActivas)
 
-    const resultadoManual: RutaOptimizada = {
+    const resultadoManual = {
       id:               `manual-${Date.now()}`,
       nombreRuta:       nombreRutaConTimestamp('Ruta Manual'),
       distanciaTotalKm: distanciaTotal,
@@ -109,6 +150,17 @@ export async function optimizarManual(set: Set, get: Get): Promise<void> {
     }
 
     set({ resultado: resultadoManual, segmentosVisuales, loading: false })
+
+    // Registrar para ML
+    registrarInicioML(
+      get,
+      'ORDEN_MANUAL',
+      transporte,
+      paradasManual.length,
+      distanciaTotal,
+      tiempoTotal,
+    )
+
   } catch {
     set({ error: 'Error al calcular ruta manual — verifica que OSRM esté corriendo', loading: false })
   }
